@@ -1,0 +1,29 @@
+{
+  "name": "anima",
+  "version": "1.0.0",
+  "description": "Autonomous Network for Intelligent Mirror Agency",
+  "main": "orchestration/router.js",
+  "scripts": {
+    "start": "node orchestration/help.js",
+    "help": "node orchestration/help.js",
+    "add-agent": "node orchestration/add-agent.js",
+    "remove-agent": "node orchestration/remove-agent.js"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "multi-agent",
+    "automation",
+    "mirror-agency"
+  ],
+  "author": "Mirror Agency",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.20.0",
+    "@google/generative-ai": "^0.11.0",
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5",
+    "lucide-react": "^0.363.0",
+    "openai": "^4.33.0"
+  }
+}
