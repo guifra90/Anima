@@ -1,6 +1,12 @@
 # CHANGELOG — ANIMA
 
 ```
+v1.5.0 — 2026-03-28
+  - Roadmap aggiornata a 5 fasi
+  - Fase 4 dedicata a Knowledge Base & RAG (pgvector, ingest Drive, knowledge-search)
+  - Fase 5 dedicata ad Agente Router e interfaccia conversazionale per dipendenti
+  - Segnati come completati: CFO, Creative Director, CLI commands, AI client
+
 v1.4.0 — 2026-03-28
   - Aggiunto client AI unificato (execution/utils/ai-client.js)
   - Supporto multi-provider: Gemini (gratuito), Claude, OpenAI

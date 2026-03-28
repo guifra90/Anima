@@ -503,35 +503,6 @@ AGENT_TIMEOUT_MS=30000
 
 ---
 
-## Roadmap di Sviluppo
-
-### Fase 1 — Foundation (Settimane 1-4)
-- [ ] Setup infrastruttura (Supabase, schema DB, Audit Log)
-- [ ] Agente **Operations Manager**: briefing giornaliero da Scoro + Gmail
-- [ ] Dashboard minimale per visualizzare output agenti
-- [ ] Sistema di notifiche base (Slack)
-
-### Fase 2 — Core Agents (Settimane 5-10)
-- [ ] Agente **Project Manager**: production tracking e alert ritardi
-- [ ] Agente **CFO**: monitoraggio budget e cash flow
-- [ ] Orchestratore con pipeline sequenziale
-- [ ] Memory layer con contesto condiviso
-
-### Fase 3 — Intelligence (Settimane 11-16)
-- [ ] Agente **Strategic Planner**: analisi competitive e research
-- [ ] Agente **Account Manager**: lead qualification automatica
-- [ ] Fan-out parallelo e merge risultati
-- [ ] Vector store per memoria semantica
-
-### Fase 4 — Scale (Settimane 17+)
-- [ ] Agente **Creative Director**: supporto creativo
-- [ ] Agente **HR Manager**: sentiment e carico lavoro
-- [ ] Loop di apprendimento automatico dalle direttive
-- [ ] API pubblica per integrazioni esterne
-- [ ] Multi-tenancy (se ANIMA diventa prodotto)
-
----
-
 ## Aggiungere un Nuovo Agente
 
 ANIMA include un sistema guidato per creare nuovi agenti in modo strutturato e consistente. Non è necessario creare file manualmente: basta eseguire il comando `add-agent` e il sistema genera tutto lo scaffolding necessario.

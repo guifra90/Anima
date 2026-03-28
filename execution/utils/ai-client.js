@@ -17,20 +17,42 @@ async function chat({ system, messages, maxTokens = 1000 }) {
         throw new Error('GEMINI_API_KEY non trovata in .env');
     }
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: MODEL,
-      systemInstruction: system || '',
-    });
+    // Usiamo v1beta per i modelli 'latest' e '2.0', v1 per gli altri
+    const apiVer = (MODEL.includes('latest') || MODEL.includes('2.0') || MODEL.includes('2.5')) ? 'v1beta' : 'v1';
+    const model = genAI.getGenerativeModel({ model: MODEL }, { apiVersion: apiVer });
+
+    // Copia i messaggi per non mutare l'originale
+    let historyMessages = [...messages];
+    
+    // Se c'è un system prompt, lo inseriamo nel primo messaggio utente per massima compatibilità
+    if (system && historyMessages.length > 0) {
+      historyMessages[0].content = `[SYSTEM INSTRUCTION]\n${system}\n\n[USER INPUT]\n${historyMessages[0].content}`;
+    }
 
     // Converte il formato messaggi ANIMA → formato Gemini
-    const history = messages.slice(0, -1).map(m => ({
+    const history = historyMessages.slice(0, -1).map(m => ({
       role:  m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
-    const lastMessage = messages[messages.length - 1].content;
+    const lastMessage = historyMessages[historyMessages.length - 1].content;
 
     const chatSession = model.startChat({ history });
-    const result      = await chatSession.sendMessage(lastMessage);
+    
+    // Funzione interna per il retry in caso di 429
+    const sendMessageWithRetry = async (msg, retries = 3, delay = 2000) => {
+      try {
+        return await chatSession.sendMessage(msg);
+      } catch (err) {
+        if ((err.message.includes('429') || err.message.includes('503')) && retries > 0) {
+          console.log(`  [AI Client] Errore temporaneo (${err.message.includes('429') ? '429' : '503'}). Riprovo tra ${delay/1000}s... (${retries} tentativi rimasti)`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return sendMessageWithRetry(msg, retries - 1, delay * 2);
+        }
+        throw err;
+      }
+    };
+
+    const result = await sendMessageWithRetry(lastMessage);
     return result.response.text();
   }
 
