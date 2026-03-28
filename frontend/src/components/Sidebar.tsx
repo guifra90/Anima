@@ -8,11 +8,13 @@ import {
   BarChart2, 
   Briefcase, 
   TrendingUp, 
-  HeartHandshake,
-  ChevronLeft,
-  ChevronRight,
-  Zap
+  HeartHandshake, 
+  ChevronLeft, 
+  ChevronRight, 
+  Zap, 
+  FileText 
 } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -45,6 +47,10 @@ const AGENT_ICONS: Record<string, React.ElementType> = {
 export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const isSOPsActive = pathname === '/sops';
 
   useEffect(() => {
     fetch('/api/chat')
@@ -65,7 +71,7 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
       {/* Header */}
       <div className="p-6 flex items-center justify-between">
         {!isCollapsed && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
             <div className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center">
               <span className="text-black font-bold text-xs">M</span>
             </div>
@@ -73,7 +79,10 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
           </div>
         )}
         {isCollapsed && (
-          <div className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center mx-auto">
+          <div 
+            className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center mx-auto cursor-pointer"
+            onClick={() => router.push('/')}
+          >
             <span className="text-black font-bold text-xs">M</span>
           </div>
         )}
@@ -87,12 +96,15 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
         
         {agents.map((agent) => {
           const Icon = AGENT_ICONS[agent.id] || Zap;
-          const isActive = activeAgentId === agent.id;
+          const isActive = !isSOPsActive && activeAgentId === agent.id;
           
           return (
             <button
               key={agent.id}
-              onClick={() => onSelectAgent(agent.id)}
+              onClick={() => {
+                onSelectAgent(agent.id);
+                if (pathname !== '/') router.push('/');
+              }}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative",
                 isActive 
@@ -112,9 +124,6 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
                   </span>
                 </div>
               )}
-              {isCollapsed && isActive && (
-                <div className="absolute right-2 w-1.5 h-1.5 bg-cyan-400 rounded-full" />
-              )}
             </button>
           );
         })}
@@ -128,9 +137,22 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      {/* Settings Footer */}
-      <div className="p-3 border-t border-white/10">
-        <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all overflow-hidden">
+      {/* SOPs & Settings Footer */}
+      <div className="p-3 border-t border-white/10 space-y-1">
+        <button 
+          onClick={() => router.push('/sops')}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative",
+            isSOPsActive 
+              ? "bg-white/10 text-white" 
+              : "text-zinc-500 hover:bg-white/5 hover:text-white"
+          )}
+        >
+          <FileText className={cn("w-5 h-5 min-w-[20px]", isSOPsActive ? "text-white" : "group-hover:text-white")} />
+          {!isCollapsed && <span className="text-sm font-medium">Procedure (SOPs)</span>}
+        </button>
+
+        <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all overflow-hidden border-t border-white/5 pt-4">
           <Settings className="w-5 h-5 min-w-[20px]" />
           {!isCollapsed && <span className="text-sm font-medium">Impostazioni</span>}
         </button>

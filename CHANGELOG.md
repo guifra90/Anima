@@ -1,6 +1,12 @@
 # CHANGELOG — ANIMA
 
 ```
+v1.6.0 — 2026-03-28
+  - Fase 4 riscritta con approccio SOPs-first (rimosso Google Drive per ora)
+  - Aggiunta struttura in 4 step: infrastruttura KB, gestione SOPs, retrieval agenti, memoria
+  - Sezione SOPs con editor, versioning automatico, access control per manager
+  - Comandi CLI dedicati: add-sop, update-sop, list-sops, archive-sop
+
 v1.5.0 — 2026-03-28
   - Roadmap aggiornata a 5 fasi
   - Fase 4 dedicata a Knowledge Base & RAG (pgvector, ingest Drive, knowledge-search)

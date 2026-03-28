@@ -42,15 +42,17 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeMode, setActiveMode] = useState('brief');
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Reset messaggi quando cambiamo agente (per ora, in futuro caricheremo la storia)
+    // Reset messaggi e sessione quando cambiamo agente
     setMessages([{
       role: 'assistant',
       content: `Ciao, sono il tuo ${agentId.replace('-', ' ')}. Come posso aiutarti oggi?`,
       timestamp: new Date()
     }]);
+    setCurrentSessionId(null);
   }, [agentId]);
 
   useEffect(() => {
@@ -69,18 +71,21 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      // In modalità Creative Director, iniettiamo il contesto della modalità se necessario
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agentId,
+          sessionId: currentSessionId,
           messages: [...messages, userMessage].map(({ role, content }) => ({ role, content }))
         })
       });
 
       const data = await response.json();
       if (data.error) throw new Error(data.error);
+
+      // Salva l'ID sessione fornito dal server per i messaggi successivi
+      if (data.sessionId) setCurrentSessionId(data.sessionId);
 
       setMessages(prev => [...prev, {
         role: 'assistant',
