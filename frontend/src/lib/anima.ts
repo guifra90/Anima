@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
+import { supabase } from './supabase';
+import { getEmbedding } from './embedding';
 
 /**
  * ANIMA Bridge — Gestisce l'accesso alle direttive degli agenti
@@ -71,7 +73,37 @@ export async function listAllAgents(): Promise<Partial<AgentInfo>[]> {
   return agents;
 }
 
-// Client AI semplificato per il frontend
+/**
+ * Cerca conoscenza semantica nelle SOPs
+ */
+async function searchKnowledge(query: string) {
+  try {
+    const queryEmbedding = await getEmbedding(query);
+
+    const { data: matches, error } = await supabase.rpc('match_knowledge', {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.4, // Ottimizzato per all-MiniLM-L6-v2
+      match_count: 3
+    });
+
+    if (error) {
+      console.warn("[RAG] Errore nella ricerca semantica (bypass):", error.message);
+      return "";
+    }
+
+    if (!matches || matches.length === 0) return "";
+
+    return matches.map((m: any) => 
+      `--- SOP: ${m.metadata?.title || 'Generale'} ---\n${m.content}`
+    ).join("\n\n");
+
+  } catch (err: any) {
+    console.warn("[RAG] Fallimento silenzioso ricerca semantica:", err.message);
+    return "";
+  }
+}
+
+// Client AI semplificato per il frontend con RAG integrato
 export async function animaChat({ agentId, messages, system }: { 
   agentId: string, 
   messages: { role: 'user' | 'assistant', content: string }[],
@@ -83,12 +115,31 @@ export async function animaChat({ agentId, messages, system }: {
   if (!apiKey) throw new Error("GEMINI_API_KEY non configurata");
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  // Usiamo v1beta per i modelli 'latest', '2.0' e '2.5', v1 per gli altri
   const apiVer = (modelName.includes('latest') || modelName.includes('2.0') || modelName.includes('2.5')) ? 'v1beta' : 'v1';
   const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: apiVer });
 
-  // Gemini richiede che il primo messaggio della history sia 'user'.
-  // Filtriamo eventuali messaggi di benvenuto iniziali dell'assistente.
+  // 1. Recupero Conoscenza Context-Aware (RAG locale)
+  const lastUserMessage = messages[messages.length - 1]?.content || "";
+  const knowledgeContext = await searchKnowledge(lastUserMessage);
+
+  // 2. Preparazione System Prompt potenziato
+  let finalSystemPrompt = system || "";
+  if (knowledgeContext) {
+    console.log(`[RAG Local] Iniettata conoscenza per domanda: "${lastUserMessage.substring(0, 30)}..."`);
+    finalSystemPrompt = `
+      [INSTRUCTIONS]
+      Sei un agente esperto di Mirror Agency. Rispondi basandoti prioritariamente sulla [KNOWLEDGE BASE] fornita. 
+      Se la conoscenza non è pertinente, usa le tue direttive generali.
+      
+      [KNOWLEDGE BASE]
+      ${knowledgeContext}
+      
+      [AGENT DIRECTIVE]
+      ${finalSystemPrompt}
+    `;
+  }
+
+  // 3. Setup History per Gemini
   let historyMessages = [...messages];
   while (historyMessages.length > 0 && historyMessages[0].role !== 'user') {
     historyMessages.shift();
@@ -98,10 +149,8 @@ export async function animaChat({ agentId, messages, system }: {
     throw new Error("Nessun messaggio utente trovato per iniziare la sessione");
   }
 
-  // Iniezione istruzioni nel primo messaggio (che ora è garantito essere 'user')
-  if (system) {
-    historyMessages[0].content = `[SYSTEM INSTRUCTION]\n${system}\n\n[USER INPUT]\n${historyMessages[0].content}`;
-  }
+  // Iniezione istruzioni (con RAG se presente)
+  historyMessages[0].content = `[SYSTEM INSTRUCTION]\n${finalSystemPrompt}\n\n[USER INPUT]\n${historyMessages[0].content}`;
 
   const history = historyMessages.slice(0, -1).map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',

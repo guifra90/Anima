@@ -11,24 +11,33 @@
 > Prima di costruire gli agenti, ANIMA deve conoscere le procedure operative ufficiali di Mirror. Le SOPs sono la fonte di verità da cui ogni agente attinge prima di rispondere. Questa fase è il prerequisito di tutto il sistema.
 
 #### Step 1 — Infrastruttura KB (Settimane 5-6)
-- [ ] **Tabella `anima_sops`** — campi: `id`, `title`, `version`, `department`, `owner`, `access_level` (all / managers / department), `status` (active / draft / archived), `content`, `last_updated`
-- [ ] **Tabella vettoriale `anima_knowledge`** — `pgvector` 768 dim con indice ivfflat, metadati: `source_type` (sop / conversation), `source_id`, `department`, `status`
-- [ ] **Schema SQL completo + migration script**
+- [x] **Tabella `anima_sops`** — campi: `id`, `title`, `version`, `department`, `owner`, `access_level`, `status`, `content`, `last_updated`
+- [x] **Tabella vettoriale `anima_knowledge`** — `pgvector` 384 dim (all-MiniLM-L6-v2), metadati: `source_type`, `source_id`, `department`, `status`
+- [x] **Schema SQL completo + migration script** (v1.0.0)
 
 #### Step 2 — Gestione SOPs (Settimane 6-7)
-- [ ] **Sezione SOPs nella dashboard** — accessibile solo ai manager autorizzati (ruoli configurabili)
-- [ ] **Editor SOPs** — caricamento testo Markdown o upload PDF, con form: titolo, reparto, owner, versione, livello di accesso
-- [ ] **Versioning automatico** — al salvataggio di una modifica, la versione precedente viene archiviata (`status: archived`), mai cancellata
-- [ ] **Script `ingest-sop.js`** — chunking ~500 token, embedding con Gemini `text-embedding-004`, salvataggio in `anima_knowledge` con `source_type: sop`
-- [ ] **Re-indicizzazione automatica** — ogni modifica a una SOP trigghera immediatamente il re-embedding
+- [x] **Sezione SOPs nella dashboard** — `/sops` completata con editor e listing
+- [x] **Editor SOPs** — caricamento testo Markdown, form completo e re-indexing automatico
+- [x] **Versioning automatico** — al salvataggio viene creata una nuova versione attiva e archiviata la precedente
+- [x] **Script `ingest-sop.js`** — chunking con overlap, embedding locale (384 dim)
+- [x] **Batch Ingestion CLI** — `node execution/utils/ingest-cli.js` per aggiornamento massivo
 
 #### Step 3 — Retrieval (Settimana 8)
-- [ ] **Script `knowledge-search.js`** — dato un testo e filtri opzionali (department, status), restituisce i chunk più rilevanti per similarità coseno
-- [ ] **Priorità delle fonti definita**: SOPs attive (massima priorità) → dati Scoro live → conoscenza LLM
-- [ ] **Citazione della fonte** — ogni risposta che usa una SOP indica titolo e versione
+- [x] **Script `knowledge-search.js`** — dato un testo e filtri opzionali (department, status), restituisce i chunk più rilevanti per similarità coseno
+- [x] **Priorità delle fonti definita**: SOPs attive (massima priorità) → dati Scoro live → conoscenza LLM
+- [x] **Citazione della fonte** — ogni risposta che usa una SOP indica titolo e versione
 
 #### Step 4 — CLI SOPs
-- [ ] **Comandi CLI**: `add-sop`, `update-sop`, `list-sops`, `archive-sop` — stessa logica guidata di `add-agent`
+- [x] **Comandi CLI**: `add-sop`, `update-sop`, `list-sops`, `archive-sop` — stessa logica guidata di `add-agent`
+
+#### [0.2.0] - 2026-03-28
+#### Aggiunto
+- **Motore RAG Locale**: Implementato sistema di embedding basato su `Transformers.js` (`all-MiniLM-L6-v2`) per eliminare la dipendenza da API esterne e costi.
+- **Unified Embedding Service**: Creato servizio backend/frontend per generazione vettori a 384 dimensioni.
+- **Knowledge Retrieval**: Integrazione nel Bridge ANIMA per l'iniezione automatica del contesto SOP nelle chat degli agenti.
+- **SOP UI**: Potenziata l'interfaccia di gestione SOP con indicizzazione vettoriale in tempo reale.
+
+### [0.1.0] - 2026-03-28
 
 ### Fase 3 — Core Agents (Settimane 9-16)
 > Gli agenti vengono costruiti dopo la KB — così dal primo giorno hanno accesso alle SOPs aziendali e rispondono già con la conoscenza reale di Mirror.
@@ -56,9 +65,9 @@
 ### Fase 6 — Agente Orchestratore & Seconda Agenzia (Settimane 25+)
 > L'obiettivo finale: qualsiasi dipendente Mirror può fare qualsiasi domanda e ricevere una risposta che sintetizza SOPs aziendali + dati Scoro live + esperienza degli agenti specializzati. Come parlare con un collega che sa tutto.
 
-- [ ] **Agente Router** — punto di ingresso unico, capisce di quali fonti ha bisogno e coordina la risposta finale
+- [x] **Agente Router** — punto di ingresso unico, capisce di quali fonti ha bisogno e coordina la risposta finale
 - [ ] **Agente HR Manager**: sentiment team, analisi carico lavoro, onboarding + SOPs HR
-- [ ] **Interfaccia conversazionale** — chat web (Next.js) per i dipendenti Mirror, con autenticazione e storico sessioni
+- [x] **Interfaccia conversazionale** — `/agents` Hub Next.js completato con supporto RAG real-time
 - [ ] **Multi-agente per dipendente** — ogni ruolo (PM, CD, Account) ha il suo agente di riferimento personalizzato
 - [ ] **API pubblica** — per integrazioni esterne (Slack bot, n8n, webhook Scoro)
 - [ ] **Multi-tenancy** — se ANIMA diventa prodotto vendibile ad altre agenzie

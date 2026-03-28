@@ -12,6 +12,7 @@ const readline = require('readline');
 const path     = require('path');
 const fs       = require('fs');
 const { chat } = require('../../execution/utils/ai-client');
+const { searchKnowledge } = require('../../execution/utils/knowledge-search');
 
 const rl  = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise(resolve => rl.question(q, resolve));
@@ -67,6 +68,10 @@ function buildUserMessage(mode, client, input, context, useFewShot) {
   };
 
   parts.push(`**${modeLabels[mode] || 'INPUT'}:**\n${input}`);
+
+  if (context) {
+    parts.push(`\n### CONOSCENZA INTERNA RILEVANTE (SOP):\n${context}`);
+  }
 
   if (useFewShot) {
     parts.push('\n---\n*Esempi di riferimento per tono e qualità:*\n' + FEW_SHOT_EXAMPLES);
@@ -131,11 +136,17 @@ async function runSession() {
   // Uso few-shot per brief e concept (più contesto aiuta)
   const useFewShot = ['brief', 'concept'].includes(mode.key);
 
+  console.log('\n  🔍 Ricerca nella Knowledge Base...');
+  const knowledgeResults = await searchKnowledge(input, 0.4, 2);
+  const knowledgeContext = knowledgeResults.length > 0 
+    ? knowledgeResults.map(r => `[SOP: ${r.metadata.title}]\n${r.content}`).join('\n\n')
+    : 'Nessuna SOP specifica trovata per questa query. Procedere con le linee guida generali.';
+
   console.log('\n  💭 Il Creative Director sta pensando...\n');
 
   // Storico conversazione per multi-turno
   const conversationHistory = [];
-  const userMessage = buildUserMessage(mode.key, client, input, context, useFewShot);
+  const userMessage = buildUserMessage(mode.key, client, input, knowledgeContext, useFewShot);
   conversationHistory.push({ role: 'user', content: userMessage });
 
   const startTime = Date.now();
@@ -170,6 +181,17 @@ async function runSession() {
     }
 
     conversationHistory.push({ role: 'user', content: followUp });
+    
+    console.log('\n  🔍 Aggiornamento contesto...');
+    const followKnowledge = await searchKnowledge(followUp, 0.4, 1);
+    const followKnowledgeContext = followKnowledge.length > 0
+      ? `\n\n### NUOVA CONOSCENZA RILEVANTE:\n${followKnowledge[0].content}`
+      : '';
+    
+    if (followKnowledgeContext) {
+      conversationHistory[conversationHistory.length - 1].content += followKnowledgeContext;
+    }
+
     console.log('\n  💭 ...\n');
 
     let followResponse;

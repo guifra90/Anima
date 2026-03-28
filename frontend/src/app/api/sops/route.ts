@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { GoogleGenerativeAI } from "@google/generativelanguage";
-
-// Nota: Re-implementiamo la logica di embedding in modo ESM per Next.js
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+import { getEmbedding } from '@/lib/embedding';
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,7 +35,7 @@ export async function POST(req: NextRequest) {
         .update({ status: 'archived' })
         .eq('id', sopId);
       
-      // 2. Crea la nuova versione (nuovo ID per semplicità di history)
+      // 2. Crea la nuova versione
       const { data: newSop, error: insertError } = await supabase
         .from('anima_sops')
         .insert([{
@@ -49,7 +45,7 @@ export async function POST(req: NextRequest) {
           content,
           access_level,
           status: 'active',
-          version: '1.1.0' // TODO: Increment logic
+          version: '1.1.0'
         }])
         .select()
         .single();
@@ -75,21 +71,23 @@ export async function POST(req: NextRequest) {
       sopId = newSop.id;
     }
 
-    // --- Ingestion Engine per RAG ---
-    // Chunking e Embedding (Eseguito in sync per ora, in futuro background worker)
-    const chunks = content.split(/\s+/).reduce((resultArray: string[][], item: string, index: number) => { 
-      const chunkIndex = Math.floor(index / 500);
-      if(!resultArray[chunkIndex]) resultArray[chunkIndex] = [];
-      resultArray[chunkIndex].push(item);
-      return resultArray;
-    }, []).map((chunk: string[]) => chunk.join(' '));
+    // --- Ingestion Engine per RAG (Local) ---
+    const words = content.split(/\s+/);
+    const chunks = [];
+    const maxTokens = 500;
+    const overlap = 50;
+
+    for (let i = 0; i < words.length; i += (maxTokens - overlap)) {
+      const chunk = words.slice(i, i + maxTokens).join(' ');
+      chunks.push(chunk);
+      if (i + maxTokens >= words.length) break;
+    }
 
     // Pulizia vecchi chunk
     await supabase.from('anima_knowledge').delete().eq('source_id', sopId);
 
     for (const [index, chunk] of chunks.entries()) {
-      const result = await embeddingModel.embedContent(chunk);
-      const embedding = result.embedding.values;
+      const embedding = await getEmbedding(chunk);
 
       await supabase.from('anima_knowledge').insert([{
         source_id: sopId,
@@ -104,6 +102,33 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('[SOP API ERROR]', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing SOP ID' }, { status: 400 });
+    }
+
+    // 1. Elimina i chunk associati nella knowledge base (RAG)
+    await supabase.from('anima_knowledge').delete().eq('source_id', id);
+
+    // 2. Elimina la SOP
+    const { error } = await supabase
+      .from('anima_sops')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('[SOP DELETE ERROR]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

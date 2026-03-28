@@ -12,7 +12,8 @@ import {
   Save,
   CheckCircle,
   Clock,
-  Briefcase
+  Briefcase,
+  Trash2
 } from 'lucide-react';
 
 interface SOP {
@@ -69,6 +70,26 @@ export default function SOPSPage() {
       }
     } catch (err) {
       console.error("Error saving SOP:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!confirm("Sei sicuro di voler eliminare questa procedura? L'azione è irreversibile e i dati verranno rimossi anche dalla memoria semantica (RAG).")) return;
+    
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/sops?id=${id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchSops();
+      }
+    } catch (err) {
+      console.error("Error deleting SOP:", err);
     } finally {
       setIsLoading(false);
     }
@@ -256,6 +277,15 @@ export default function SOPSPage() {
                   </div>
 
                   <ChevronRight size={24} className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-800 group-hover:text-cyan-400 group-hover:translate-x-2 transition-all" />
+                  
+                  {/* Delete Button */}
+                  <button
+                    onClick={(e) => handleDelete(sop.id!, e)}
+                    className="absolute bottom-6 right-6 p-2 text-zinc-800 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all z-20"
+                    title="Elimina SOP"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               ))}
             </div>
