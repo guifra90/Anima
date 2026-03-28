@@ -1,11 +1,11 @@
 ## Roadmap di Sviluppo
 
 ### Fase 1 — Foundation (Settimane 1-4)
-- [ ] Setup infrastruttura (Supabase, schema DB, Audit Log)
-- [ ] Dashboard minimale per visualizzare output agenti
-- [ ] Sistema di notifiche base (Slack)
-- [ ] Architettura comandi CLI: `add-agent`, `remove-agent`, `help` con auto-discovery
-- [ ] Client AI unificato con supporto multi-provider (Gemini, Claude, OpenAI)
+- [x] Setup infrastruttura (Supabase, schema DB, Audit Log)
+- [x] Dashboard minimale per visualizzare output agenti
+- [x] Sistema di notifiche base (Slack)
+- [x] Architettura comandi CLI: `add-agent`, `remove-agent`, `help` con auto-discovery
+- [x] Client AI unificato con supporto multi-provider (Gemini, Claude, OpenAI)
 
 ### Fase 2 — Knowledge Base SOPs (Settimane 5-8)
 > Prima di costruire gli agenti, ANIMA deve conoscere le procedure operative ufficiali di Mirror. Le SOPs sono la fonte di verità da cui ogni agente attinge prima di rispondere. Questa fase è il prerequisito di tutto il sistema.
@@ -29,6 +29,7 @@
 
 #### Step 4 — CLI SOPs
 - [x] **Comandi CLI**: `add-sop`, `update-sop`, `list-sops`, `archive-sop` — stessa logica guidata di `add-agent`
+- [x] **Gestione cancellazione SOP** — eliminazione fisica e semantica dalla dashboard
 
 #### [0.2.0] - 2026-03-28
 #### Aggiunto
@@ -50,7 +51,7 @@
 - [ ] **Integrazione RAG** — CFO e tutti i nuovi agenti interrogano la KB SOPs prima di ogni risposta
 
 ### Fase 4 — Intelligence (Settimane 17-22)
-- [ ] Agente **Creative Director**: pensiero creativo senior per brand luxury *(in sviluppo — integrazione SOPs Creative da aggiungere)*
+- [x] Agente **Creative Director**: pensiero creativo senior per brand luxury (RAG integrato)
 - [ ] Agente **Strategic Planner**: analisi competitive e research + SOPs Strategy
 - [ ] Agente **Account Manager**: lead qualification automatica + SOPs Business Dev
 - [ ] Fan-out parallelo e merge risultati tra agenti

@@ -1,6 +1,12 @@
 # CHANGELOG — ANIMA
 
 ```
+v1.7.0 — 2026-03-28
+  - RAG Pipeline integrata: chunking con overlap (500/50), local embedding (transformers.js), pgvector
+  - Gestione SOPs completa: interfaccia /sops con CRUD (Create, Read, Update, Delete)
+  - Agent Hub operativo: chat potenziata da RAG, badge "SOP Aware" e retry logic avanzata
+  - Fix infrastrutturali: symlink .env, mapping Next.js env, fix import Gemini
+
 v1.6.0 — 2026-03-28
   - Fase 4 riscritta con approccio SOPs-first (rimosso Google Drive per ora)
   - Aggiunta struttura in 4 step: infrastruttura KB, gestione SOPs, retrieval agenti, memoria
