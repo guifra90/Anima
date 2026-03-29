@@ -1,18 +1,15 @@
-"use client";
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   Settings, 
-  MessageSquare, 
-  BarChart2, 
-  Briefcase, 
   TrendingUp, 
-  HeartHandshake, 
   ChevronLeft, 
   ChevronRight, 
-  Zap, 
-  FileText 
+  FileText,
+  LayoutDashboard,
+  Database,
+  PlusCircle,
+  Activity
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { clsx, type ClassValue } from 'clsx';
@@ -22,44 +19,18 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export interface Agent {
-  id: string;
-  name: string;
-  department: string;
-  responsibility: string;
-}
-
-interface SidebarProps {
-  activeAgentId: string;
-  onSelectAgent: (agentId: string) => void;
-}
-
-const AGENT_ICONS: Record<string, React.ElementType> = {
-  'operations-manager': Zap,
-  'strategic-planner': TrendingUp,
-  'creative-director': Briefcase,
-  'cfo': BarChart2,
-  'account-manager': MessageSquare,
-  'project-manager': Users,
-  'hr-manager': HeartHandshake,
-};
-
-export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) {
-  const [agents, setAgents] = useState<Agent[]>([]);
+export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
-  const isSOPsActive = pathname === '/sops';
-
-  useEffect(() => {
-    fetch('/api/chat')
-      .then(res => res.json())
-      .then(data => {
-        if (data.agents) setAgents(data.agents);
-      })
-      .catch(err => console.error("Error loading agents:", err));
-  }, []);
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+    { id: 'missions', label: 'Mission Board', icon: TrendingUp, path: '/missions' },
+    { id: 'team', label: 'Agency Team', icon: Users, path: '/team' },
+    { id: 'memory', label: 'Memory (KB)', icon: Database, path: '/memory' },
+    { id: 'sops', label: 'Procedure (SOPs)', icon: FileText, path: '/sops' },
+  ];
 
   return (
     <aside 
@@ -75,7 +46,10 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
             <div className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center">
               <span className="text-black font-bold text-xs">M</span>
             </div>
-            <span className="text-white font-bold tracking-tighter text-xl">MIRROR ANIMA</span>
+            <div className="flex flex-col">
+              <span className="text-white font-bold tracking-tighter text-xl leading-none">ANIMA v2</span>
+              <span className="text-[10px] text-cyan-400/50 font-medium tracking-widest uppercase">Agency OS</span>
+            </div>
           </div>
         )}
         {isCollapsed && (
@@ -88,23 +62,20 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
         )}
       </div>
 
-      {/* Agents List */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      {/* Main Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1">
         <div className={cn("text-xs font-semibold text-zinc-500 mb-4 px-3 uppercase tracking-widest", isCollapsed && "text-center")}>
-          {isCollapsed ? "Ag" : "Network Agenti"}
+          {isCollapsed ? "Nav" : "Menu Principale"}
         </div>
         
-        {agents.map((agent) => {
-          const Icon = AGENT_ICONS[agent.id] || Zap;
-          const isActive = !isSOPsActive && activeAgentId === agent.id;
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.path;
           
           return (
             <button
-              key={agent.id}
-              onClick={() => {
-                onSelectAgent(agent.id);
-                if (pathname !== '/') router.push('/');
-              }}
+              key={item.id}
+              onClick={() => router.push(item.path)}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative",
                 isActive 
@@ -117,17 +88,45 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
               )}
               <Icon className={cn("w-5 h-5 min-w-[20px]", isActive ? "text-cyan-400" : "group-hover:text-white")} />
               {!isCollapsed && (
-                <div className="flex flex-col items-start overflow-hidden">
-                  <span className="text-sm font-medium truncate w-full">{agent.name}</span>
-                  <span className="text-[10px] text-zinc-500 truncate uppercase tracking-tighter">
-                    {agent.department}
-                  </span>
-                </div>
+                <span className="text-sm font-medium">{item.label}</span>
               )}
             </button>
           );
         })}
+
+        {/* Quick Actions */}
+        {!isCollapsed && (
+          <div className="mt-8 px-3">
+             <div className="text-xs font-semibold text-zinc-500 mb-4 uppercase tracking-widest">
+              Azioni Rapide
+            </div>
+            <button 
+              onClick={() => router.push('/missions/new')}
+              className="w-full flex items-center gap-2 px-3 py-2 bg-cyan-400 text-black rounded-lg text-sm font-bold hover:bg-cyan-300 transition-colors"
+            >
+              <PlusCircle size={16} />
+              Nuova Missione
+            </button>
+          </div>
+        )}
       </nav>
+
+      {/* Heartbeat Status Indicator */}
+      {!isCollapsed && (
+        <div className="px-6 py-4 mx-3 mb-4 bg-zinc-900/50 rounded-xl border border-white/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Heartbeat</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-[10px] text-green-500 font-bold">ONLINE</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Activity size={12} className="text-cyan-400" />
+            <span className="text-xs text-zinc-400">Pronto per task...</span>
+          </div>
+        </div>
+      )}
 
       {/* Collapse Toggle */}
       <button 
@@ -137,24 +136,11 @@ export default function Sidebar({ activeAgentId, onSelectAgent }: SidebarProps) 
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      {/* SOPs & Settings Footer */}
-      <div className="p-3 border-t border-white/10 space-y-1">
-        <button 
-          onClick={() => router.push('/sops')}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative",
-            isSOPsActive 
-              ? "bg-white/10 text-white" 
-              : "text-zinc-500 hover:bg-white/5 hover:text-white"
-          )}
-        >
-          <FileText className={cn("w-5 h-5 min-w-[20px]", isSOPsActive ? "text-white" : "group-hover:text-white")} />
-          {!isCollapsed && <span className="text-sm font-medium">Procedure (SOPs)</span>}
-        </button>
-
-        <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all overflow-hidden border-t border-white/5 pt-4">
+      {/* Footer Settings */}
+      <div className="p-3 border-t border-white/10">
+        <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all overflow-hidden">
           <Settings className="w-5 h-5 min-w-[20px]" />
-          {!isCollapsed && <span className="text-sm font-medium">Impostazioni</span>}
+          {!isCollapsed && <span className="text-sm font-medium">Impostazioni OS</span>}
         </button>
       </div>
     </aside>
