@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+"use client";
+
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Settings, 
@@ -21,8 +23,23 @@ function cn(...inputs: ClassValue[]) {
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [systemHealth, setSystemHealth] = useState<any>(null);
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) setSystemHealth(await res.json());
+      } catch (err) {}
+    };
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isOnline = systemHealth?.services?.supabase?.status === 'connected';
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -35,7 +52,7 @@ export default function Sidebar() {
   return (
     <aside 
       className={cn(
-        "h-screen bg-[#0A0A0A] border-r border-white/10 transition-all duration-300 flex flex-col relative",
+        "h-screen bg-[#0A0A0A] border-r border-white/10 transition-all duration-300 flex flex-col relative z-50 shadow-[4px_0_24px_rgba(0,0,0,0.5)]",
         isCollapsed ? "w-20" : "w-72"
       )}
     >
@@ -43,7 +60,7 @@ export default function Sidebar() {
       <div className="p-6 flex items-center justify-between">
         {!isCollapsed && (
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
-            <div className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(34,211,238,0.3)]">
               <span className="text-black font-bold text-xs">M</span>
             </div>
             <div className="flex flex-col">
@@ -54,7 +71,7 @@ export default function Sidebar() {
         )}
         {isCollapsed && (
           <div 
-            className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center mx-auto cursor-pointer"
+            className="w-8 h-8 rounded-full bg-cyan-400 flex items-center justify-center mx-auto cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.3)]"
             onClick={() => router.push('/')}
           >
             <span className="text-black font-bold text-xs">M</span>
@@ -70,7 +87,9 @@ export default function Sidebar() {
         
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.path;
+          const isActive = item.path === '/' 
+            ? pathname === '/' 
+            : pathname.startsWith(item.path);
           
           return (
             <button
@@ -102,7 +121,7 @@ export default function Sidebar() {
             </div>
             <button 
               onClick={() => router.push('/missions/new')}
-              className="w-full flex items-center gap-2 px-3 py-2 bg-cyan-400 text-black rounded-lg text-sm font-bold hover:bg-cyan-300 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-cyan-400 to-cyan-500 text-black rounded-lg text-sm font-bold hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all"
             >
               <PlusCircle size={16} />
               Nuova Missione
@@ -113,17 +132,21 @@ export default function Sidebar() {
 
       {/* Heartbeat Status Indicator */}
       {!isCollapsed && (
-        <div className="px-6 py-4 mx-3 mb-4 bg-zinc-900/50 rounded-xl border border-white/5">
+        <div className="px-6 py-4 mx-3 mb-4 bg-white/[0.02] rounded-xl border border-white/5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Heartbeat</span>
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-[10px] text-green-500 font-bold">ONLINE</span>
+              <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]")} />
+              <span className={cn("text-[10px] font-bold uppercase", isOnline ? "text-emerald-500" : "text-rose-500")}>
+                {isOnline ? "OPERATIONAL" : "DISRUPTED"}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Activity size={12} className="text-cyan-400" />
-            <span className="text-xs text-zinc-400">Pronto per task...</span>
+            <Activity size={12} className={isOnline ? "text-cyan-400" : "text-rose-400"} />
+            <span className="text-[9px] font-medium text-zinc-500 uppercase tracking-tighter">
+              {isOnline ? "Neural Core Synchronized" : "Connection Error"}
+            </span>
           </div>
         </div>
       )}
@@ -131,14 +154,14 @@ export default function Sidebar() {
       {/* Collapse Toggle */}
       <button 
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-20 w-6 h-6 bg-cyan-400 text-black rounded-full flex items-center justify-center shadow-lg shadow-cyan-400/20 hover:scale-110 transition-transform z-50"
+        className="absolute -right-3 top-20 w-6 h-6 bg-cyan-400 text-black rounded-full flex items-center justify-center shadow-lg shadow-cyan-400/20 hover:scale-110 transition-transform z-[60]"
       >
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
       {/* Footer Settings */}
       <div className="p-3 border-t border-white/10">
-        <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all overflow-hidden">
+        <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all overflow-hidden text-left">
           <Settings className="w-5 h-5 min-w-[20px]" />
           {!isCollapsed && <span className="text-sm font-medium">Impostazioni OS</span>}
         </button>

@@ -1,80 +1,353 @@
-import fs from 'fs';
-import path from 'path';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
 import { supabase } from './supabase';
 import { getEmbedding } from './embedding';
 
 /**
- * ANIMA Bridge — Gestisce l'accesso alle direttive degli agenti
- * e l'interazione con i motori AI nel contesto del frontend.
+ * ANIMA Bridge — Gestisce l'accesso agli agenti nel DB
+ * e l'interazione con i motori AI nel contesto del frontend (v2).
  */
-
-// Risolve il percorso verso la root del progetto ANIMA
-const ROOT_DIR = path.resolve(process.cwd(), '..');
-
-// Carica le variabili d'ambiente dalla root
-dotenv.config({ path: path.join(ROOT_DIR, '.env') });
 
 export interface AgentInfo {
   id: string;
   name: string;
+  role: string;
   department: string;
-  responsibility: string;
-  directive: string;
-  systemPrompt: string;
+  status: string;
+  bio?: string;
+  avatar_url?: string;
+  system_prompt?: string;
+  model_id?: string;
+  adapter_config?: any;
+  reports_to?: string;
+  directives?: string;
+  traits?: string[];
+  created_at?: string;
 }
 
+export interface Department {
+  id: string;
+  name: string;
+}
+
+export interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  api_key?: string;
+  base_url?: string;
+  is_active: boolean;
+}
+
+export interface Mission {
+  id: string;
+  title: string;
+  objective: string;
+  status: 'planning' | 'active' | 'completed' | 'cancelled';
+  plannerAgentId?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Task {
+  id: string;
+  mission_id: string;
+  agent_id: string;
+  title: string;
+  description?: string;
+  status: 'pending' | 'running' | 'completed' | 'error' | 'blocked';
+  result?: string;
+  order_index: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+
+/**
+ * Recupera le informazioni di un singolo agente dal DB
+ */
 export async function getAgentInfo(agentId: string): Promise<AgentInfo | null> {
-  const agentPath = path.join(ROOT_DIR, 'agents', agentId);
-  const directivePath = path.join(agentPath, 'directive.md');
-  const systemPath = path.join(agentPath, 'prompts', 'system.md');
+  const { data, error } = await supabase
+    .from('anima_agents')
+    .select('*')
+    .eq('id', agentId)
+    .single();
 
-  if (!fs.existsSync(directivePath)) return null;
-
-  const directive = fs.readFileSync(directivePath, 'utf8');
-  const systemPrompt = fs.readFileSync(systemPath, 'utf8');
-
-  // Estrae nome e reparto dai metadati del file markdown
-  const nameMatch = directive.match(/^# Direttiva — (.+)/m);
-  const deptMatch = directive.match(/\*\*Reparto:\*\* (.+)/);
-  const respMatch = directive.match(/\n## Responsabilità\n(.+)/);
-
-  return {
-    id: agentId,
-    name: nameMatch ? nameMatch[1].trim() : agentId,
-    department: deptMatch ? deptMatch[1].trim() : 'General',
-    responsibility: respMatch ? respMatch[1].trim() : '',
-    directive,
-    systemPrompt
-  };
-}
-
-export async function listAllAgents(): Promise<Partial<AgentInfo>[]> {
-  const agentsDir = path.join(ROOT_DIR, 'agents');
-  if (!fs.existsSync(agentsDir)) return [];
-
-  const dirs = fs.readdirSync(agentsDir).filter(f => 
-    fs.statSync(path.join(agentsDir, f)).isDirectory()
-  );
-
-  const agents = [];
-  for (const slug of dirs) {
-    const info = await getAgentInfo(slug);
-    if (info) {
-      agents.push({
-        id: info.id,
-        name: info.name,
-        department: info.department,
-        responsibility: info.responsibility
-      });
-    }
+  if (error || !data) {
+    console.error(`[ANIMA LIB] Errore recupero agente ${agentId}:`, error?.message);
+    return null;
   }
-  return agents;
+
+  return data as AgentInfo;
 }
 
 /**
- * Cerca conoscenza semantica nelle SOPs
+ * Elenca tutti gli agenti presenti nel database
+ */
+export async function listAllAgents(): Promise<AgentInfo[]> {
+  const { data, error } = await supabase
+    .from('anima_agents')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error("[ANIMA LIB] Errore recupero lista agenti:", error.message);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Crea (assume) un nuovo agente nel sistema
+ */
+export async function createAgent(agentData: Partial<AgentInfo>) {
+  const dataToInsert: any = { ...agentData };
+  
+  // Sanitize empty strings to null for nullable foreign keys
+  if (dataToInsert.reports_to === "") dataToInsert.reports_to = null;
+  if (dataToInsert.model_id === "") dataToInsert.model_id = null;
+
+  const { data, error } = await supabase
+    .from('anima_agents')
+    .insert([dataToInsert])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[ANIMA LIB] Errore creazione agente:", error.message);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Aggiorna un agente esistente
+ */
+export async function updateAgent(id: string, agentData: Partial<AgentInfo>) {
+  const dataToUpdate: any = { ...agentData };
+
+  // Sanitize empty strings to null for nullable foreign keys
+  if (dataToUpdate.reports_to === "") dataToUpdate.reports_to = null;
+  if (dataToUpdate.model_id === "") dataToUpdate.model_id = null;
+
+  const { data, error } = await supabase
+    .from('anima_agents')
+    .update(dataToUpdate)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[ANIMA LIB] Errore aggiornamento agente:", error.message);
+    throw error;
+  }
+
+  return data;
+}
+
+
+/**
+ * Verifica l'univocità dello slug
+ */
+export async function isSlugUnique(slug: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('anima_agents')
+    .select('*', { count: 'exact', head: true })
+    .eq('id', slug);
+  
+  if (error) return false;
+  return count === 0;
+}
+
+/** --- DEPARTMENTS --- **/
+
+export async function listDepartments(): Promise<Department[]> {
+  const { data, error } = await supabase.from('anima_departments').select('*').order('name');
+  if (error) {
+    console.error("[ANIMA LIB] Error listing departments:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function createDepartment(dept: Department) {
+  const { data, error } = await supabase.from('anima_departments').insert([dept]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteDepartment(id: string) {
+  const { error } = await supabase.from('anima_departments').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateDepartment(id: string, name: string) {
+  const { data, error } = await supabase.from('anima_departments').update({ name }).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+
+/** --- AI MODELS --- **/
+
+export async function listAiModels(): Promise<AIModel[]> {
+  const { data, error } = await supabase.from('anima_ai_models').select('*').order('name');
+  if (error) {
+    console.error("[ANIMA LIB] Error listing AI models:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function createAiModel(model: AIModel) {
+  const { data, error } = await supabase.from('anima_ai_models').insert([model]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAiModel(id: string) {
+  const { error } = await supabase.from('anima_ai_models').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateAiModel(id: string, modelData: Partial<AIModel>) {
+  const { data, error } = await supabase.from('anima_ai_models').update(modelData).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+
+/** --- MISSIONS --- **/
+
+export async function listMissions(): Promise<Mission[]> {
+  const { data, error } = await supabase.from('anima_missions').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error("[ANIMA LIB] Error listing missions:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function getMission(id: string): Promise<Mission | null> {
+  const { data, error } = await supabase.from('anima_missions').select('*').eq('id', id).single();
+  if (error) return null;
+  return data;
+}
+
+export async function createMission(mission: Partial<Mission>) {
+  const { data, error } = await supabase.from('anima_missions').insert([mission]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateMission(id: string, missionData: Partial<Mission>) {
+  const { data, error } = await supabase.from('anima_missions').update(missionData).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteMission(id: string) {
+  const { error } = await supabase.from('anima_missions').delete().eq('id', id);
+  if (error) throw error;
+}
+
+
+/** --- TASKS --- **/
+
+export async function listTasksByMission(missionId: string): Promise<Task[]> {
+  const { data, error } = await supabase.from('anima_tasks').select('*').eq('mission_id', missionId).order('order_index');
+  if (error) {
+    console.error("[ANIMA LIB] Error listing tasks:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function createTask(task: Partial<Task>) {
+  const { data, error } = await supabase.from('anima_tasks').insert([task]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTask(id: string, taskData: Partial<Task>) {
+  const { data, error } = await supabase.from('anima_tasks').update(taskData).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTask(id: string) {
+  const { error } = await supabase.from('anima_tasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
+
+/** --- MESSAGES (Neural Stream) --- **/
+
+export async function createMessage(msg: {
+  mission_id?: string;
+  agent_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  metadata?: any;
+}) {
+  const { data, error } = await supabase
+    .from('anima_messages')
+    .insert([msg])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[ANIMA LIB] Error creating message:", error.message);
+    throw error;
+  }
+  return data;
+}
+
+export async function listMessagesByMission(missionId: string) {
+  const { data, error } = await supabase
+    .from('anima_messages')
+    .select('*')
+    .eq('mission_id', missionId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error("[ANIMA LIB] Error listing messages:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+
+
+
+/** --- CONFIGURATION --- **/
+
+export async function listConfig() {
+  const { data, error } = await supabase.from('anima_config').select('*');
+  if (error) {
+    console.error("[ANIMA LIB] Error listing config:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function updateConfig(key: string, value: any) {
+  const { data, error } = await supabase
+    .from('anima_config')
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+
+  if (error) {
+    console.error(`[ANIMA LIB] Error updating config ${key}:`, error.message);
+    throw error;
+  }
+  return data;
+}
+
+
+/**
+ * Cerca conoscenza semantica nelle SOPs (RAG)
  */
 async function searchKnowledge(query: string) {
   try {
@@ -82,7 +355,7 @@ async function searchKnowledge(query: string) {
 
     const { data: matches, error } = await supabase.rpc('match_knowledge', {
       query_embedding: queryEmbedding,
-      match_threshold: 0.4, // Ottimizzato per all-MiniLM-L6-v2
+      match_threshold: 0.4, 
       match_count: 3
     });
 
@@ -103,83 +376,58 @@ async function searchKnowledge(query: string) {
   }
 }
 
-// Client AI semplificato per il frontend con RAG integrato
-export async function animaChat({ agentId, messages, system }: { 
+/**
+ * Client AI unificato (Agnostico)
+ * In v2, non chiama più Gemini direttamente ma usa il bridge API locale (/api/ai/chat).
+ * Questo permette di essere totalmente indipendenti dal modello (Ollama, Claude, Gemini, etc).
+ */
+export async function animaChat({ agentId, messages, systemPrompt: overrideSystemPrompt }: { 
   agentId: string, 
   messages: { role: 'user' | 'assistant', content: string }[],
-  system?: string 
+  systemPrompt?: string
 }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const modelName = process.env.AI_MODEL || 'gemini-1.5-flash';
-
-  if (!apiKey) throw new Error("GEMINI_API_KEY non configurata");
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const apiVer = (modelName.includes('latest') || modelName.includes('2.0') || modelName.includes('2.5')) ? 'v1beta' : 'v1';
-  const model = genAI.getGenerativeModel({ model: modelName }, { apiVersion: apiVer });
-
-  // 1. Recupero Conoscenza Context-Aware (RAG locale)
-  const lastUserMessage = messages[messages.length - 1]?.content || "";
-  const knowledgeContext = await searchKnowledge(lastUserMessage);
-
-  // 2. Preparazione System Prompt potenziato
-  let finalSystemPrompt = system || "";
-  if (knowledgeContext) {
-    console.log(`[RAG Local] Iniettata conoscenza per domanda: "${lastUserMessage.substring(0, 30)}..."`);
-    finalSystemPrompt = `
-      [INSTRUCTIONS]
-      Sei un agente esperto di Mirror Agency. Rispondi basandoti prioritariamente sulla [KNOWLEDGE BASE] fornita. 
-      Se la conoscenza non è pertinente, usa le tue direttive generali.
-      
-      [KNOWLEDGE BASE]
-      ${knowledgeContext}
-      
-      [AGENT DIRECTIVE]
-      ${finalSystemPrompt}
-    `;
-  }
-
-  // 3. Setup History per Gemini
-  let historyMessages = [...messages];
-  while (historyMessages.length > 0 && historyMessages[0].role !== 'user') {
-    historyMessages.shift();
-  }
-
-  if (historyMessages.length === 0) {
-    throw new Error("Nessun messaggio utente trovato per iniziare la sessione");
-  }
-
-  // Iniezione istruzioni (con RAG se presente)
-  historyMessages[0].content = `[SYSTEM INSTRUCTION]\n${finalSystemPrompt}\n\n[USER INPUT]\n${historyMessages[0].content}`;
-
-  const history = historyMessages.slice(0, -1).map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }));
-
-  const chat = model.startChat({ history });
-  const lastMessage = historyMessages[historyMessages.length - 1].content;
-
-  // Funzione con retry potenziato per il frontend
-  async function sendMessageWithRetry(msg: string, retries = 5, delay = 2000): Promise<string> {
-    try {
-      const resp = await chat.sendMessage(msg);
-      return resp.response.text();
-    } catch (err: any) {
-      const errorMsg = err.message || '';
-      const isTemporary = errorMsg.includes('429') || 
-                          errorMsg.includes('503') || 
-                          errorMsg.toLowerCase().includes('service unavailable') ||
-                          errorMsg.toLowerCase().includes('too many requests');
-
-      if (isTemporary && retries > 0) {
-        console.log(`  [Frontend AI] Tentativo fallito (errore temporaneo). Riprovo tra ${delay/1000}s... (${retries} rimasti)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return sendMessageWithRetry(msg, retries - 1, delay * 2);
-      }
-      throw err;
+  try {
+    // 1. RAG (eseguito sul frontend se possibile)
+    const lastUserMessage = messages[messages.length - 1]?.content || "";
+    const knowledgeContext = await searchKnowledge(lastUserMessage);
+    
+    // Uniamo il prompt di sistema dell'agente (se fornito come override) con il contesto RAG
+    let systemPrompt = knowledgeContext ? `[KNOWLEDGE BASE]\n${knowledgeContext}` : undefined;
+    if (overrideSystemPrompt) {
+      systemPrompt = systemPrompt ? `${overrideSystemPrompt}\n\n${systemPrompt}` : overrideSystemPrompt;
     }
+
+    // 2. Controllo Ambiente: Server vs Client
+    if (typeof window === 'undefined') {
+      // AMBIENTE SERVER: Chiamiamo direttamente la logica del bridge
+      console.log("[ANIMA LIB] Executing animaChat on SERVER context");
+      const { executeAiChat } = await import('./ai-bridge-server');
+      const result = await executeAiChat({
+        agentId,
+        messages,
+        systemPrompt
+      });
+      return result.content;
+    }
+
+    // AMBIENTE CLIENT: Usiamo il bridge API via HTTP
+    const res = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId,
+        messages,
+        systemPrompt
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Chat failed");
+
+    return data.content;
+  } catch (err: any) {
+    console.error("[ANIMA LIB] Chat fallita:", err.message);
+    throw err;
   }
-  
-  return await sendMessageWithRetry(lastMessage);
 }
+

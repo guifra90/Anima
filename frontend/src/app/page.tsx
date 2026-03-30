@@ -71,19 +71,23 @@ export default function MissionControl() {
           </h1>
         </div>
         
-        <div className="flex gap-4">
-          <div className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl">
-            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Heartbeat</p>
-            <div className="flex items-center gap-2 text-emerald-500 font-bold">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <span>ACTIVE</span>
+        <div className="flex gap-3">
+          <div className="px-5 py-2.5 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl flex items-center gap-3">
+            <div>
+              <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Heartbeat</p>
+              <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs">
+                <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />
+                <span>ONLINE</span>
+              </div>
             </div>
           </div>
-          <div className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl">
-            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Local LLM</p>
-            <div className="flex items-center gap-2 text-cyan-400 font-bold">
-               <Cpu size={14} />
-               <span>DEEPSEEK-R1</span>
+          <div className="px-5 py-2.5 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl flex items-center gap-3">
+            <div>
+               <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Active Engine</p>
+               <div className="flex items-center gap-2 text-cyan-400 font-bold text-xs uppercase">
+                  <Cpu size={12} />
+                  <span>DeepSeek R1</span>
+               </div>
             </div>
           </div>
         </div>

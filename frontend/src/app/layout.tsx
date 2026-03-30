@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: "Autonomous Network for Intelligent Mirror Agency",
 };
 
+import Sidebar from "@/components/Sidebar";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +29,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="h-full bg-black text-white flex overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 h-full overflow-y-auto bg-[#0A0A0A] relative">
+          {children}
+        </main>
+      </body>
     </html>
   );
 }
