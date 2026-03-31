@@ -1,0 +1,57 @@
+[
+  {
+    "name": "gcal:list_events",
+    "description": "Elenca gli eventi del calendario, filtrati per data di inizio.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "calendarId": {
+          "type": "string",
+          "description": "ID del calendario (default: 'primary')."
+        },
+        "timeMin": {
+          "type": "string",
+          "description": "Data di inizio dell'evento in formato ISO (default: adesso)."
+        },
+        "timeMax": {
+          "type": "string",
+          "description": "Data di fine dell'evento in formato ISO (es. fra 7 giorni per la settimana)."
+        },
+        "maxResults": {
+          "type": "number",
+          "description": "Numero massimo di eventi da elencare (default: 10)."
+        }
+      }
+    }
+  },
+  {
+    "name": "gcal:create_event",
+    "description": "Crea un nuovo evento nel calendario.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "Titolo dell'evento."
+        },
+        "description": {
+          "type": "string",
+          "description": "Descrizione dell'evento."
+        },
+        "start": {
+          "type": "string",
+          "description": "Data e ora di inizio in formato ISO (es. '2026-03-31T09:00:00Z')."
+        },
+        "end": {
+          "type": "string",
+          "description": "Data e ora di fine in formato ISO."
+        },
+        "location": {
+          "type": "string",
+          "description": "Luogo dell'evento."
+        }
+      },
+      "required": ["summary", "start", "end"]
+    }
+  }
+]

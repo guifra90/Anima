@@ -12,6 +12,9 @@ dist/
 .env.test.local
 .env.production.local
 
+# Reference files (Paperclip architecture)
+paperclip/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

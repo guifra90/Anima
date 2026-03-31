@@ -30,18 +30,45 @@ class OpenRouterAdapter extends BaseAdapter {
    * @param {Object} options - { model: 'deepseek/deepseek-r1', maxTokens: 1000 }
    */
   async chat(messages, system, options = {}) {
-    const model = options.model || this.config.model || 'deepseek/deepseek-r1';
+    const model = options.model || this.config.model || 'google/gemini-2.0-flash-001';
     const msgs = this.formatMessagesWithSystem(messages, system);
     
     try {
-      const response = await this.client.chat.completions.create({
+      const completionOptions = {
         model,
-        max_tokens: options.maxTokens || 8000,
+        max_tokens: options.max_tokens || options.maxTokens || 4000,
         messages: msgs,
-        // OpenRouter non supporta sempre system_fingerprint o altri parametri OpenAI specifici
-      });
+      };
+
+      // Supporto Tool Calling (OpenRouter supporta il formato OpenAI)
+      if (options.tools && options.tools.length > 0) {
+        completionOptions.tools = options.tools.map(t => ({
+          type: 'function',
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters || t.input_schema
+          }
+        }));
+        completionOptions.tool_choice = 'auto';
+      }
+
+      const response = await this.client.chat.completions.create(completionOptions);
+      const message = response.choices[0].message;
+
+      // Se il modello restituisce tool_calls, li formattiamo per ANIMA
+      if (message.tool_calls) {
+        return {
+          content: message.content || '',
+          tool_calls: message.tool_calls.map(tc => ({
+            id: tc.id,
+            name: tc.function.name,
+            args: JSON.parse(tc.function.arguments)
+          }))
+        };
+      }
       
-      return response.choices[0].message.content;
+      return message.content;
     } catch (err) {
       console.error(`  [OpenRouterAdapter] Error:`, err.message);
       throw err;

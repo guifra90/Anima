@@ -20,6 +20,8 @@ interface Agent {
   reports_to?: string;
   traits?: string[];
   directives?: string;
+  skills?: string[];
+  active_connections?: string[];
 }
 
 interface Department {
@@ -60,6 +62,8 @@ export default function HiringHall() {
     reports_to: '',
     traits: [],
     directives: '',
+    skills: [],
+    active_connections: [],
     status: 'offline'
   });
   
@@ -72,8 +76,10 @@ export default function HiringHall() {
   const [systemHealth, setSystemHealth] = useState<any>(null);
   const [agencyConstitution, setAgencyConstitution] = useState<string>('');
   const [isConstitutionSaving, setIsConstitutionSaving] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<'identity' | 'traits' | 'directives'>('identity');
+  const [activeModalTab, setActiveModalTab] = useState<'identity' | 'traits' | 'directives' | 'skills' | 'connections'>('identity');
   const [activeSettingsTab, setActiveSettingsTab] = useState<'team' | 'agency'>('team');
+  const [availableSkills, setAvailableSkills] = useState<any[]>([]);
+  const [userConnections, setUserConnections] = useState<any[]>([]);
 
   useEffect(() => {
     fetchInitialData();
@@ -108,6 +114,20 @@ export default function HiringHall() {
       if (depData.departments) setDepartments(depData.departments);
       if (modData.models) setAiModels(modData.models);
 
+      // Fetch Skills and Connections
+      const [skillsRes, connRes] = await Promise.all([
+        fetch('/api/skills'),
+        fetch('/api/connections')
+      ]);
+      if (skillsRes.ok) {
+        const skillsData = await skillsRes.json();
+        setAvailableSkills(skillsData.skills || []);
+      }
+      if (connRes.ok) {
+        const connData = await connRes.json();
+        setUserConnections(connData.connections || []);
+      }
+
       // Fetch Global Constitution
       const configRes = await fetch('/api/config');
       if (configRes.ok) {
@@ -136,6 +156,8 @@ export default function HiringHall() {
       reports_to: '',
       traits: [],
       directives: '',
+      skills: [],
+      active_connections: [],
       status: 'offline'
     });
     setActiveModalTab('identity');
@@ -156,6 +178,8 @@ export default function HiringHall() {
       reports_to: agent.reports_to || '',
       traits: agent.traits || [],
       directives: agent.directives || '',
+      skills: agent.skills || [],
+      active_connections: agent.active_connections || [],
       status: agent.status || 'offline'
     });
     setActiveModalTab('identity');
@@ -289,54 +313,34 @@ export default function HiringHall() {
   const agentTree = buildAgentTree(agents);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white p-8 font-sans">
+    <div className="min-h-screen bg-[#050505] text-white p-10 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
       
       {/* --- HEADER --- */}
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+      <header className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-10 mb-16 border-b border-white/[0.03] pb-10">
         <div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-cyan-400 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.3)]">
-              <Users size={28} className="text-black" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-black italic tracking-tighter">HIRING HALL</h1>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-bold">Autonomous Workforce Management</p>
-            </div>
+          <div className="flex items-center gap-2.5 text-cyan-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">
+            <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
+            Workforce Status: <span className="text-white">Optimized</span>
           </div>
-          <p className="text-zinc-400 max-w-xl text-sm leading-relaxed">
-            Gestisci il tuo team di agenti autonomi. Definisci gerarchie, assegna modelli LLM specializzati e scala la tua operatività Mirror.
+          <h1 className="text-6xl font-black tracking-[-0.05em] italic bg-gradient-to-b from-white via-white to-white/20 bg-clip-text text-transparent uppercase">
+            Hiring Hall
+          </h1>
+          <p className="text-zinc-500 max-w-xl text-xs font-bold italic leading-relaxed mt-4">
+            Gestisci la tua rete di agenti autonomi. Definisci gerarchie, assegna modelli LLM specializzati e scala la tua operatività Mirror con precisione millimetrica.
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {systemHealth && (
-            <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-2xl mr-2">
-              <div className="flex flex-col gap-1">
-                <StatusItem label="SUPABASE" status={systemHealth.services.supabase.status} />
-                <StatusItem label="OLLAMA" status={systemHealth.services.ollama.status} />
-              </div>
-              <div className="w-px h-6 bg-white/10 mx-1" />
-              <div className="flex flex-col gap-1">
-                <StatusItem label="GEMINI" status={systemHealth.services.ai_providers.gemini.status} />
-                <StatusItem label="OPENROUTER" status={systemHealth.services.ai_providers.openrouter.status} />
-              </div>
-            </div>
-          )}
-
-          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-            <button onClick={() => setActiveSettingsTab('team')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeSettingsTab === 'team' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}>TEAM</button>
-            <button onClick={() => setActiveSettingsTab('agency')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeSettingsTab === 'agency' ? 'bg-cyan-400 text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}>AGENCY</button>
+        <div className="flex items-center gap-6">
+          <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-3xl">
+            <button onClick={() => setActiveSettingsTab('team')} className={`px-6 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase ${activeSettingsTab === 'team' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:text-white'}`}>ROSTER</button>
+            <button onClick={() => setActiveSettingsTab('agency')} className={`px-6 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase ${activeSettingsTab === 'agency' ? 'bg-cyan-500 text-black shadow-xl' : 'text-zinc-500 hover:text-white'}`}>GOVERNANCE</button>
           </div>
           
-          <div className="w-px h-6 bg-white/10 mx-2" />
+          <div className="w-px h-8 bg-white/10 mx-2" />
 
-          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-zinc-500'}`}><Users size={16} /></button>
-            <button onClick={() => setViewMode('org')} className={`p-2 rounded-lg transition-all ${viewMode === 'org' ? 'bg-white/10 text-white' : 'text-zinc-500'}`}><GitBranch size={16} /></button>
-          </div>
-          <button onClick={openHireModal} className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-2xl font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-[0_10px_30px_rgba(255,255,255,0.1)]">
-            <UserPlus size={18} strokeWidth={3} />
-            HIRE AGENT
+          <button onClick={openHireModal} className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-2xl font-black text-[12px] uppercase tracking-[0.25em] hover:bg-cyan-500 hover:text-white transition-all shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
+            <UserPlus size={20} strokeWidth={3} />
+            HIRE_AGENT
           </button>
         </div>
       </header>
@@ -353,6 +357,11 @@ export default function HiringHall() {
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
+        <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 ml-4">
+            <button onClick={() => setViewMode('grid')} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-lg ${viewMode === 'grid' ? 'bg-white text-black shadow-lg shadow-black/40' : 'text-zinc-600 hover:text-white'}`}>GRID</button>
+            <button onClick={() => setViewMode('org')} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-lg ${viewMode === 'org' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20' : 'text-zinc-600 hover:text-white'}`}>ORG</button>
+        </div>
+        <div className="w-px h-8 bg-white/10 mx-2" />
         <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
             <button onClick={() => setIsDeptModalOpen(true)} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-cyan-400 transition-colors">DEPARTMENTS</button>
             <button onClick={() => setIsModelModalOpen(true)} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-cyan-400 transition-colors">MODELS</button>
@@ -427,59 +436,71 @@ export default function HiringHall() {
           <AnimatePresence mode="popLayout">
             {isLoading ? (
               Array(6).fill(0).map((_, i) => (
-                <div key={i} className="h-64 bg-white/5 rounded-[2rem] border border-white/5 animate-pulse" />
+                <div key={i} className="h-64 bg-white/5 rounded-[3rem] border border-white/5 animate-pulse" />
               ))
             ) : filteredAgents.map((agent) => (
-              <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} key={agent.id} className="group relative bg-[#0C0C0C] border border-white/10 rounded-[2rem] p-8 hover:border-cyan-400/30 transition-all duration-500 overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-400/5 blur-[50px] rounded-full group-hover:bg-cyan-400/10 transition-all" />
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center group-hover:border-cyan-400/50 transition-colors">
-                    <Bot size={28} className="text-cyan-400" />
+              <motion.div 
+                layout 
+                initial={{ opacity: 0, y: 20 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                exit={{ opacity: 0, scale: 0.9 }} 
+                key={agent.id} 
+                className="group relative bg-zinc-950/40 backdrop-blur-3xl border border-white/[0.05] rounded-[3rem] p-10 hover:border-cyan-500/30 transition-all duration-500 overflow-hidden shadow-2xl"
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-[50px] rounded-full group-hover:bg-cyan-500/10 transition-all" />
+                
+                <div className="flex justify-between items-start mb-8">
+                  <div className="w-16 h-16 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center group-hover:border-cyan-500/50 transition-colors shadow-inner">
+                    <Bot size={32} className="text-cyan-500" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => openEditModal(agent)} className="p-2 bg-white/5 rounded-lg border border-white/10 text-zinc-600 hover:text-cyan-400 hover:bg-white/10 transition-all">
-                        <Edit3 size={14} />
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => openEditModal(agent)} className="p-2.5 bg-white/5 rounded-xl border border-white/10 text-zinc-600 hover:text-cyan-400 hover:bg-white/10 transition-all">
+                        <Edit3 size={16} />
                     </button>
-                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${agent.status === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+                    <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border flex items-center gap-2 ${agent.status === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'online' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-zinc-800'}`} />
                         {agent.status}
                     </div>
                   </div>
                 </div>
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold tracking-tight mb-1 group-hover:text-cyan-400 transition-colors">{agent.name}</h3>
-                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest flex items-center gap-2">
-                    {agent.department || 'General'}  <span className="w-1 h-1 bg-zinc-800 rounded-full" /> {agent.role}
-                  </p>
+
+                <div className="mb-6">
+                  <h3 className="text-2xl font-black italic tracking-tight mb-2 group-hover:text-cyan-400 transition-colors uppercase">{agent.name}</h3>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest italic">{agent.department || 'CORE_UNIT'}</span>
+                    <div className="w-1 h-1 bg-zinc-800 rounded-full" />
+                    <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest italic">{agent.role}</span>
+                  </div>
                 </div>
 
                 {agent.traits && agent.traits.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-6">
+                  <div className="flex flex-wrap gap-2 mb-8">
                     {agent.traits.slice(0, 3).map(trait => (
-                      <span key={trait} className="px-2 py-0.5 bg-white/5 border border-white/5 rounded text-[8px] font-bold text-zinc-500 group-hover:border-cyan-400/20 group-hover:text-zinc-300 transition-all">{trait}</span>
+                      <span key={trait} className="px-3 py-1 bg-white/[0.03] border border-white/5 rounded-lg text-[8px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-zinc-300 transition-all italic">{trait}</span>
                     ))}
-                    {agent.traits.length > 3 && <span className="text-[8px] text-zinc-700 font-bold">+{agent.traits.length - 3}</span>}
+                    {agent.traits.length > 3 && <span className="text-[9px] text-zinc-800 font-black italic">+{agent.traits.length - 3}</span>}
                   </div>
                 )}
                 
-                <p className="text-sm text-zinc-400 line-clamp-2 min-h-[2.5rem] mb-6 leading-relaxed">{agent.bio || 'Nessuna biografia definita.'}</p>
-                <div className="flex items-center justify-between pt-6 border-t border-white/5">
-                  <div className="flex items-center gap-2 flex-grow">
-                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                      {updatingAgentId === agent.id ? <Loader2 size={12} className="animate-spin text-cyan-400" /> : <Cpu size={14} className="text-zinc-500" />}
+                <p className="text-xs text-zinc-500 line-clamp-2 min-h-[3rem] mb-8 leading-relaxed font-bold italic">{agent.bio || 'Initial_Orchestration_Mandate: Pending Description...'}</p>
+                
+                <div className="pt-8 border-t border-white/[0.03] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                      {updatingAgentId === agent.id ? <Loader2 size={16} className="animate-spin text-cyan-400" /> : <Cpu size={18} className="text-zinc-600" />}
                     </div>
                     <div className="flex-grow min-w-0">
-                      <p className="text-[8px] text-zinc-600 font-bold uppercase tracking-widest leading-none mb-1">AI Engine Provider</p>
+                      <p className="text-[8px] text-zinc-700 font-black uppercase tracking-widest leading-none mb-1.5 italic">Engine_Provider</p>
                       <div className="relative">
                         <select 
-                          className="w-full bg-transparent text-[10px] font-bold text-zinc-300 italic border-none outline-none appearance-none cursor-pointer hover:text-cyan-400 transition-colors"
+                          className="w-full bg-transparent text-[10px] font-black text-cyan-500 italic border-none outline-none appearance-none cursor-pointer hover:text-white transition-all uppercase tracking-widest"
                           value={agent.model_id || ''}
                           onChange={(e) => handleQuickModelUpdate(agent.id, e.target.value)}
                           disabled={updatingAgentId !== null}
                         >
-                          <option value="" disabled>Not Set</option>
+                          <option value="" disabled>NOT_ALLOCATED</option>
                           {aiModels.map(m => (
-                            <option key={m.id} value={m.id} className="bg-[#0E0E0E] text-white py-2">{m.name}</option>
+                            <option key={m.id} value={m.id} className="bg-[#0E0E0E] text-white py-2">{m.name.toUpperCase()}</option>
                           ))}
                         </select>
                       </div>
@@ -509,13 +530,13 @@ export default function HiringHall() {
         {isHiringModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-end p-6 bg-black/60 backdrop-blur-sm">
             <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="w-full max-w-xl h-full bg-[#0E0E0E] rounded-[3rem] border-l border-white/10 shadow-2xl overflow-hidden flex flex-col">
-              <div className="bg-white/[0.02] border-b border-white/5 flex px-8">
-                {['identity', 'traits', 'directives'].map((tab) => (
+              <div className="bg-white/[0.02] border-b border-white/5 flex px-8 overflow-x-auto scrollbar-hide">
+                {['identity', 'traits', 'directives', 'skills', 'connections'].map((tab) => (
                   <button 
                     key={tab}
                     type="button" 
                     onClick={() => setActiveModalTab(tab as any)}
-                    className={`px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${activeModalTab === tab ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-zinc-600 hover:text-zinc-400'}`}
+                    className={`px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 whitespace-nowrap ${activeModalTab === tab ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-zinc-600 hover:text-zinc-400'}`}
                   >
                     {tab}
                   </button>
@@ -620,6 +641,88 @@ export default function HiringHall() {
                   </motion.div>
                 )}
 
+                {activeModalTab === 'skills' && (
+                  <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                    <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
+                      <h4 className="text-[10px] font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Zap size={14} className="text-cyan-400" />
+                        Available Skills & Toolsets
+                      </h4>
+                      <p className="text-[11px] text-zinc-500 mb-6 leading-relaxed italic">
+                        Seleziona i set di strumenti che l'agente sarà in grado di utilizzare autonomamente.
+                      </p>
+                      <div className="space-y-3">
+                        {availableSkills.map(skill => {
+                          const isActive = newAgent.skills?.includes(skill.id);
+                          return (
+                            <button 
+                              key={skill.id}
+                              type="button"
+                              onClick={() => {
+                                const current = newAgent.skills || [];
+                                const next = isActive ? current.filter(id => id !== skill.id) : [...current, skill.id];
+                                setNewAgent({...newAgent, skills: next});
+                              }}
+                              className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between ${isActive ? 'bg-cyan-400/10 border-cyan-400/50 text-white' : 'bg-white/5 border-white/10 text-zinc-500 hover:border-white/20'}`}
+                            >
+                              <div>
+                                <p className="text-xs font-black uppercase tracking-widest">{skill.name}</p>
+                                <p className="text-[10px] opacity-60 mt-1">{skill.description}</p>
+                              </div>
+                              {isActive && <CheckCircle2 size={16} className="text-cyan-400" />}
+                            </button>
+                          );
+                        })}
+                        {availableSkills.length === 0 && <p className="text-center text-[10px] text-zinc-600 uppercase font-black py-4">No skills registered in /skills directory</p>}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeModalTab === 'connections' && (
+                  <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                    <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
+                      <h4 className="text-[10px] font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Key size={14} className="text-cyan-400" />
+                        Authorized Connections
+                      </h4>
+                      <p className="text-[11px] text-zinc-500 mb-6 leading-relaxed italic">
+                        Scegli a quali dei tuoi account collegati questo agente può accedere.
+                      </p>
+                      {userConnections.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-[10px] text-zinc-600 uppercase font-black mb-4">No connections found</p>
+                          <button type="button" onClick={() => window.location.href='/connections'} className="text-xs text-cyan-400 hover:underline font-bold">Go to Connections Page</button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {userConnections.map(conn => {
+                            const isActive = newAgent.active_connections?.includes(conn.id);
+                            return (
+                              <button 
+                                key={conn.id}
+                                type="button"
+                                onClick={() => {
+                                  const current = newAgent.active_connections || [];
+                                  const next = isActive ? current.filter(id => id !== conn.id) : [...current, conn.id];
+                                  setNewAgent({...newAgent, active_connections: next});
+                                }}
+                                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between ${isActive ? 'bg-cyan-400/10 border-cyan-400/50 text-white' : 'bg-white/5 border-white/10 text-zinc-500 hover:border-white/20'}`}
+                              >
+                                <div>
+                                  <p className="text-xs font-black uppercase tracking-widest">{conn.name}</p>
+                                  <p className="text-[10px] opacity-60 mt-1 capitalize">{conn.type} account</p>
+                                </div>
+                                {isActive && <CheckCircle2 size={16} className="text-cyan-400" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
                 <div className="pt-6 border-t border-white/5">
                     <button type="button" onClick={() => setIsAdvancedOpen(!isAdvancedOpen)} className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest">
                         {isAdvancedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -676,25 +779,32 @@ export default function HiringHall() {
 
 function OrgNode({ agent, onEdit }: { agent: any, onEdit: (agent: any) => void }) {
     return (
-        <div className="flex flex-col items-center relative mx-4">
+        <div className="flex flex-col items-center relative mx-8">
             {/* Agent Card */}
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="group relative bg-[#0C0C0C] border border-white/10 rounded-2xl p-6 w-56 hover:border-cyan-400/50 transition-all duration-300 z-10 shadow-xl">
-                <div className="flex items-center gap-4 mb-3">
-                    <div className="w-10 h-10 bg-white/5 rounded-xl border border-white/10 flex items-center justify-center text-cyan-400">
-                        <Bot size={20} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              className="group relative bg-[#0C0C0C]/80 backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] p-6 w-64 hover:border-cyan-400/50 transition-all duration-500 z-10 shadow-2xl hover:shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
+            >
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <GitBranch size={40} />
+                </div>
+                <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500/10 transition-colors">
+                        <Bot size={24} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-bold truncate tracking-tight">{agent.name}</h4>
-                        <p className="text-[10px] text-zinc-500 uppercase font-black truncate">{agent.role}</p>
+                        <h4 className="text-base font-black truncate tracking-tight uppercase italic text-white group-hover:text-cyan-400 transition-colors">{agent.name}</h4>
+                        <p className="text-[10px] text-zinc-600 uppercase font-black tracking-widest italic">{agent.role}</p>
                     </div>
                 </div>
-                <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                    <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border flex items-center gap-1 ${agent.status === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'}`}>
-                        <span className={`w-1 h-1 rounded-full ${agent.status === 'online' ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                    <div className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] border flex items-center gap-2 ${agent.status === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500 font-bold'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'online' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-zinc-800'}`} />
                         {agent.status}
                     </div>
-                    <button onClick={() => onEdit(agent)} className="text-zinc-600 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-all">
-                        <Settings size={12} />
+                    <button onClick={() => onEdit(agent)} className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-xl border border-white/10 text-zinc-600 hover:text-cyan-400 hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100">
+                        <Settings size={14} />
                     </button>
                 </div>
             </motion.div>
@@ -702,16 +812,16 @@ function OrgNode({ agent, onEdit }: { agent: any, onEdit: (agent: any) => void }
             {/* Sub-agents / Connection Lines */}
             {agent.children && agent.children.length > 0 && (
                 <>
-                    <div className="w-px h-12 bg-white/20 relative">
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-cyan-400" />
+                    <div className="w-px h-16 bg-gradient-to-b from-cyan-400 to-white/10 relative">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
                     </div>
-                    <div className="relative flex justify-center">
+                    <div className="relative flex justify-center gap-4">
                         {/* Horizontal connector line */}
                         {agent.children.length > 1 && (
-                            <div className="absolute top-0 h-px bg-white/20" 
+                            <div className="absolute top-0 h-px bg-white/10" 
                                  style={{ 
-                                     left: `calc(50% / ${agent.children.length})`,
-                                     right: `calc(50% / ${agent.children.length})`
+                                     left: `calc(100% / (${agent.children.length} * 2))`,
+                                     right: `calc(100% / (${agent.children.length} * 2))`
                                  }} 
                             />
                         )}

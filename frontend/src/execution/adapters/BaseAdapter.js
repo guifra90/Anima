@@ -11,8 +11,8 @@ class BaseAdapter {
    * Chat interaction
    * @param {Array} messages - Array of { role, content } objects
    * @param {string} system - System prompt
-   * @param {Object} options - Additional options (model, maxTokens, etc.)
-   * @returns {Promise<string>} - The AI response text
+   * @param {Object} options - Additional options (model, maxTokens, tools, etc.)
+   * @returns {Promise<string|Object>} - The AI response text or tool call result
    */
   async chat(messages, system, options = {}) {
     throw new Error('Method "chat" must be implemented by concrete adapters.');

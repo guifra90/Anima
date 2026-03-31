@@ -127,18 +127,18 @@ export default function AgentsHub() {
   );
 
   return (
-    <div className="flex h-screen bg-[#0A0A0A] text-white overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#050505] text-white overflow-hidden font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
       
       {/* Sidebar: Agent Selection */}
-      <aside className="w-80 border-r border-white/5 bg-[#0C0C0C] flex flex-col">
-        <div className="p-6 border-b border-white/5">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-cyan-400 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(34,211,238,0.3)]">
-              <Zap size={24} className="text-black" strokeWidth={2.5} />
+      <aside className="w-80 border-r border-white/[0.03] bg-zinc-950/40 backdrop-blur-3xl flex flex-col shadow-[20px_0_50px_-20px_rgba(0,0,0,0.5)]">
+        <div className="p-8 border-b border-white/[0.03]">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)] border border-white/20">
+              <Zap size={22} className="text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <h2 className="font-bold tracking-tight text-lg italic">ANIMA HUB</h2>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-bold">Autonomous Network</p>
+              <h2 className="font-black tracking-tight text-xl italic uppercase leading-none">ANIMA HUB</h2>
+              <p className="text-[8px] text-zinc-500 uppercase tracking-[0.3em] font-black mt-1">Neural Network</p>
             </div>
           </div>
 
@@ -195,35 +195,35 @@ export default function AgentsHub() {
       </aside>
 
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col relative bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.03),transparent_40%)]">
+      <main className="flex-1 flex flex-col relative bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.05),transparent_40%)]">
         
         {/* Chat Header */}
-        <header className="px-8 py-5 border-b border-white/5 flex items-center justify-between backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10">
-              <Bot size={28} className="text-cyan-400" />
+        <header className="px-10 py-6 border-b border-white/[0.03] flex items-center justify-between backdrop-blur-3xl sticky top-0 z-10">
+          <div className="flex items-center gap-6">
+            <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 shadow-inner">
+              <Bot size={32} className="text-cyan-500" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-bold text-xl">{selectedAgent?.name || 'Seleziona Agente'}</h1>
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+              <div className="flex items-center gap-3">
+                <h1 className="font-black text-2xl italic tracking-tight uppercase leading-none">{selectedAgent?.name || 'Seleziona Agente'}</h1>
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
               </div>
-              <p className="text-xs text-zinc-500 font-medium uppercase tracking-widest">
-                Mirror Core Engine  ·  {selectedAgent?.department}
+              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1.5 italic">
+                Neural Optimization Core  ·  {selectedAgent?.department || 'UNIT_O_1'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
              <button 
                 onClick={() => setMessages([])}
-                className="p-2 text-zinc-500 hover:text-white transition-all bg-white/5 hover:bg-white/10 rounded-xl border border-white/10"
+                className="p-3 text-zinc-500 hover:text-white transition-all bg-white/[0.02] hover:bg-white/[0.04] rounded-xl border border-white/5 group"
                 title="Svuota chat"
              >
-                <RefreshCcw size={18} />
+                <RefreshCcw size={18} className="group-hover:rotate-180 transition-transform duration-500" />
              </button>
-             <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[10px] font-bold text-emerald-400 tracking-widest uppercase">
-                RAG Active
+             <div className="px-6 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[9px] font-black text-emerald-400 tracking-widest uppercase italic">
+                INTELLIGENCE_STREAM_ENCRYPTED
              </div>
           </div>
         </header>

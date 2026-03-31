@@ -12,6 +12,7 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { listMessagesByMission } from '@/lib/anima';
 import ReactMarkdown from 'react-markdown';
+import { cn } from '@/lib/utils';
 
 interface Mission {
   id: string;
@@ -162,7 +163,7 @@ export default function MissionDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="text-cyan-400 animate-spin" size={40} />
       </div>
     );
@@ -170,7 +171,7 @@ export default function MissionDetailPage() {
 
   if (!mission) {
     return (
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col items-center justify-center p-8 text-center">
+        <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-8 text-center">
             <AlertCircle size={48} className="text-red-500 mb-4" />
             <h1 className="text-2xl font-black italic">MISSION NOT FOUND</h1>
             <p className="text-zinc-500 max-w-sm mt-2">La missione richiesta non è presente nel database o l'ID non è corretto.</p>
@@ -180,225 +181,252 @@ export default function MissionDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white p-8 font-sans">
+    <div className="flex flex-col h-full font-sans">
       
-      {/* --- HEADER --- */}
-      <header className="max-w-6xl mx-auto mb-16">
-        <Link href="/missions" className="flex items-center gap-2 text-zinc-500 hover:text-cyan-400 transition-colors mb-8 text-[10px] font-black uppercase tracking-[0.3em] font-bold">
-            <ChevronLeft size={14} /> Mission Fleet
-        </Link>
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center text-cyan-400 shadow-2xl">
-              <Target size={32} />
+      {/* --- TOP BAR / BREADCRUMBS --- */}
+      <header className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-black/40 backdrop-blur-3xl sticky top-0 z-30 shadow-2xl">
+        <div className="flex items-center gap-6">
+          <Link href="/" className="p-3 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/10 group">
+            <ChevronLeft size={20} className="text-zinc-500 group-hover:text-cyan-400 transition-colors" />
+          </Link>
+          <div className="h-8 w-px bg-white/10" />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black tracking-tight text-white italic uppercase">{mission.title}</h1>
+              <span className={cn(
+                "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] border shadow-lg",
+                mission.status === 'active' ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+              )}>
+                  {mission.status}
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-4xl font-black italic tracking-tighter uppercase">{mission.title}</h1>
-                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${mission.status === 'active' ? 'bg-cyan-400/10 border-cyan-400/20 text-cyan-400' : 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400'}`}>
-                    {mission.status}
-                </span>
-              </div>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-bold italic">Strategic Orchestration in Progress</p>
-            </div>
+            <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.3em] mt-1">
+              ORCHESTRATION_ID: <span className="text-zinc-400 italic">#{id?.slice(0, 12)}</span>
+            </p>
           </div>
-          
-          <div className="flex bg-white/5 border border-white/10 p-4 rounded-2xl items-center gap-6">
-             <div className="text-center">
-                <p className="text-[8px] text-zinc-600 font-black uppercase tracking-widest mb-1">Tasks</p>
-                <p className="text-xs font-bold text-cyan-400">{tasks.filter(t => t.status === 'completed').length} / {tasks.length}</p>
-             </div>
-             <div className="w-px h-8 bg-white/10" />
-             <button 
-                onClick={() => setIsStreamOpen(!isStreamOpen)}
-                className={`flex flex-col items-center px-4 py-2 rounded-xl border transition-all ${isStreamOpen ? 'bg-cyan-400/10 border-cyan-400/30 text-cyan-400' : 'bg-white/5 border-white/10 text-zinc-500'}`}
-             >
-                <p className="text-[7px] font-black uppercase tracking-[0.2em] mb-1">Neural Link</p>
-                <Activity size={16} className={isStreamOpen ? 'animate-pulse' : ''} />
-             </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400">
+            <CheckCircle2 size={12} className="text-emerald-500" />
+            <span className="text-zinc-200">{tasks.filter(t => t.status === 'completed').length}</span>
+            <span className="text-zinc-600">/</span>
+            <span>{tasks.length}</span>
           </div>
+          <button 
+            onClick={() => setIsStreamOpen(!isStreamOpen)}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-wider",
+              isStreamOpen ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" : "bg-white/5 border-white/10 text-zinc-500"
+            )}
+          >
+            <Activity size={12} className={isStreamOpen ? 'animate-pulse' : ''} />
+            Stream
+          </button>
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         
-        {/* --- LEFT COLUMN: MISSION DATA --- */}
-        <div className={`space-y-6 ${isStreamOpen ? 'xl:col-span-3 lg:col-span-4' : 'lg:col-span-4'}`}>
-            <div className="bg-white/[0.02] border border-white/5 rounded-[2rem] p-8">
-                <h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Sparkles size={12} /> Objective Details
-                </h3>
-                <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-line italic">"{mission.objective}"</p>
-            </div>
-
-            <div className="bg-white/[0.02] border border-white/5 rounded-[2rem] p-8">
-                <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-4">Operations Board</h3>
-                <div className="space-y-4">
-                    <button className="w-full bg-white/5 border border-white/10 rounded-xl py-3 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/20 transition-all">Complete Mission</button>
-                    <button className="w-full bg-white/5 border border-white/10 rounded-xl py-3 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all">Abort Mission</button>
-                </div>
-            </div>
-        </div>
-
-        {/* --- RIGHT COLUMN: TASK TIMELINE --- */}
-        <div className={`space-y-6 ${isStreamOpen ? 'xl:col-span-6 lg:col-span-8' : 'lg:col-span-8'} min-w-0`}>
-            <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <LayoutDashboard size={12} /> Actionable Task Plan
-            </h3>
+        {/* --- MAIN WORKSPACE --- */}
+        <main className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+          <div className="max-w-4xl mx-auto space-y-8">
             
-            <div className="space-y-4 relative">
-                {/* Vertical Line — The 'Spine' of the Mission */}
-                <div className="absolute left-6 top-8 bottom-8 w-px bg-white/5 z-0" />
+            {/* Objective Summary */}
+            <section className="bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-10 relative overflow-hidden backdrop-blur-3xl shadow-2xl group">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-cyan-500/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Sparkles size={80} />
+                </div>
+                <h3 className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_cyan]" /> Mission Objective
+                </h3>
+                <p className="text-xl text-zinc-400 leading-relaxed italic font-black uppercase tracking-tight">
+                  "{mission.objective}"
+                </p>
+            </section>
 
+            {/* Task Timeline */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <LayoutDashboard size={10} /> Task Execution Plan
+                </h3>
+              </div>
+
+              <div className="space-y-2 relative">
                 <AnimatePresence mode="popLayout">
                     {tasks.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-20 border border-white/5 bg-white/[0.01] rounded-[3rem] text-center">
-                            <Loader2 className="animate-spin text-zinc-800 mb-4" size={32} />
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-700">Awaiting Orchestration Plan...</p>
+                        <div className="flex flex-col items-center justify-center py-12 border border-white/5 bg-white/[0.01] rounded-xl text-center">
+                            <Loader2 className="animate-spin text-zinc-800 mb-2" size={24} />
+                            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-700">Synthesizing Orchestration...</p>
                         </div>
                     ) : tasks.map((task, idx) => (
                         <motion.div 
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.05 }}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.03 }}
                             key={task.id}
-                            className="relative z-10 flex gap-6 group"
+                            className={cn(
+                              "group border rounded-[2rem] transition-all duration-300 overflow-hidden shadow-lg",
+                              task.status === 'running' ? "bg-cyan-500/[0.04] border-cyan-500/30 ring-1 ring-cyan-500/20" : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10"
+                            )}
                         >
-                            {/* Step Indicator Node */}
-                            <div className="shrink-0 w-12 h-12 rounded-2xl bg-[#0A0A0A] border border-white/10 flex items-center justify-center group-hover:border-cyan-400/50 transition-all shadow-xl">
-                                {task.status === 'completed' ? (
-                                    <CheckCircle2 size={20} className="text-emerald-400" />
-                                ) : task.status === 'running' ? (
-                                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
-                                ) : (
-                                    <span className="text-[10px] font-black italic font-mono text-zinc-700 group-hover:text-cyan-400">0{idx + 1}</span>
-                                )}
+                            <div className="p-6 flex items-center gap-6">
+                                {/* Compact Status Node */}
+                                <div className={cn(
+                                  "shrink-0 w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-300",
+                                  task.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/20" : 
+                                  task.status === 'running' ? "bg-cyan-500/20 border-cyan-500/40 animate-pulse" : 
+                                  "bg-white/5 border-white/10"
+                                )}>
+                                    {task.status === 'completed' ? (
+                                        <CheckCircle2 size={18} className="text-emerald-500" />
+                                    ) : task.status === 'running' ? (
+                                        <Activity size={18} className="text-cyan-400" />
+                                    ) : (
+                                        <span className="text-xs font-black text-zinc-500 italic">0{idx + 1}</span>
+                                    )}
+                                </div>
+
+                                {/* Task Info */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className={cn(
+                                      "text-sm font-bold tracking-tight italic",
+                                      task.status === 'completed' ? "text-zinc-500 line-through" : "text-white"
+                                    )}>
+                                      {task.title}
+                                    </h4>
+                                    <div className={cn(
+                                      "px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border",
+                                      task.status === 'completed' ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-500/60" :
+                                      task.status === 'running' ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" :
+                                      "bg-zinc-800 border-white/5 text-zinc-500"
+                                    )}>
+                                      {task.status}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[9px] font-bold text-cyan-500/50 uppercase tracking-tighter flex items-center gap-1">
+                                      <Bot size={10} /> {task.agent_id}
+                                    </span>
+                                    <span className="text-zinc-700 text-[9px]">•</span>
+                                    <p className="text-[10px] text-zinc-500 truncate">{task.description}</p>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-2">
+                                  {executingTaskId === task.id ? (
+                                    <div className="px-3 py-1.5 bg-zinc-800 rounded-lg flex items-center gap-2 border border-white/5">
+                                      <Loader2 size={10} className="animate-spin text-cyan-400" />
+                                      <span className="text-[8px] font-black text-cyan-400 uppercase tracking-widest">Running</span>
+                                    </div>
+                                  ) : (
+                                    <button 
+                                      onClick={() => runTask(task.id)}
+                                      className="p-2 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-lg text-zinc-600 transition-all border border-transparent hover:border-cyan-500/20"
+                                      title="Execute Task"
+                                    >
+                                      <Play size={14} fill="currentColor" className="opacity-40" />
+                                    </button>
+                                  )}
+                                  {task.status === 'running' && (
+                                    <button 
+                                      onClick={() => updateTaskStatus(task.id, 'completed')}
+                                      className="p-2 hover:bg-emerald-500/10 hover:text-emerald-400 rounded-lg text-zinc-600 transition-all border border-transparent hover:border-emerald-500/20"
+                                      title="Mark as Done"
+                                    >
+                                      <CheckCircle2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
                             </div>
 
-                            {/* Task Card */}
-                            <div className={`flex-1 border rounded-[2rem] p-6 transition-all backdrop-blur-sm ${
-                                task.status === 'completed' 
-                                ? 'bg-white/[0.01] border-white/5 opacity-60' 
-                                : task.status === 'running'
-                                ? 'bg-cyan-400/[0.03] border-cyan-400/20 shadow-[0_0_40px_rgba(34,211,238,0.05)]'
-                                : 'bg-white/[0.03] border-white/10 hover:border-white/20'
-                            }`}>
-                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-3">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-3">
-                                            <h4 className={`text-lg font-black italic tracking-tight ${task.status === 'completed' ? 'text-zinc-600 line-through' : 'text-white'}`}>
-                                                {task.title}
-                                            </h4>
-                                            <div className={`px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest border ${
-                                                task.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
-                                                task.status === 'running' ? 'bg-cyan-400/10 border-cyan-400/20 text-cyan-400' :
-                                                'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
-                                            }`}>
-                                                {task.status}
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center gap-1.5 p-0.5 px-2 bg-white/5 rounded-full border border-white/10 text-[8px] font-black text-cyan-400 uppercase tracking-widest">
-                                                <Bot size={10} /> {task.agent_id}
-                                            </div>
-                                            {task.order_index > 0 && (
-                                                <span className="text-[8px] font-black text-zinc-700 uppercase tracking-widest">SEQ: {task.order_index}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {(task.status === 'pending' || task.status === 'error' || task.status === 'running' || task.status === 'completed') && (
-                                            <button 
-                                                disabled={executingTaskId !== null}
-                                                onClick={() => runTask(task.id)} 
-                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl hover:scale-105 active:scale-95 transition-all text-[9px] font-black uppercase tracking-tighter disabled:opacity-50 ${
-                                                    task.status === 'error' ? 'bg-red-500 text-white' : 
-                                                    task.status === 'running' ? 'bg-zinc-800 text-cyan-400 border border-cyan-400/20' :
-                                                    task.status === 'completed' ? 'bg-zinc-800 text-zinc-400 border border-white/5 hover:border-cyan-400/30 hover:text-cyan-400' :
-                                                    'bg-gradient-to-r from-cyan-400 to-cyan-500 text-black'
-                                                }`}
-                                            >
-                                                <Play size={10} fill={task.status === 'error' ? 'white' : task.status === 'completed' ? '#71717a' : task.status === 'running' ? 'cyan' : 'black'} /> 
-                                                {executingTaskId === task.id ? 'PROCESSING...' : 
-                                                 task.status === 'error' ? 'RETRY TASK' : 
-                                                 task.status === 'running' ? 'RE-RUN TASK' : 
-                                                 task.status === 'completed' ? 'RE-RUN TASK' : 'START TASK'}
-                                            </button>
-                                        )}
-                                        {task.status === 'running' && (
-                                            <button 
-                                                onClick={() => updateTaskStatus(task.id, 'completed')} 
-                                                className="flex items-center gap-2 px-4 py-2 bg-emerald-400 text-black rounded-xl hover:scale-105 active:scale-95 transition-all text-[9px] font-black uppercase tracking-tighter"
-                                            >
-                                                <CheckCircle2 size={10} /> MARK DONE
-                                            </button>
-                                        )}
-                                    </div>
+                            {/* Integrated Result Area */}
+                            {task.result && (
+                              <div className="border-t border-white/5 bg-black/40 p-6">
+                                <div className="flex items-center gap-2 mb-4 text-[8px] font-black uppercase text-zinc-600 tracking-widest">
+                                  <Activity size={10} className="text-cyan-500" /> Intelligence Report
                                 </div>
-                                <p className="text-xs text-zinc-500 leading-relaxed italic">"{task.description}"</p>
-                                
-                                {task.result && (
-                                    <div className="mt-6 p-5 bg-black/40 border border-white/5 rounded-2xl text-[10px] text-emerald-400/80 font-mono leading-relaxed relative overflow-hidden group/result">
-                                        <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/20" />
-                                        <div className="flex items-center gap-2 mb-2 text-[8px] font-black uppercase text-zinc-600">
-                                            <ExternalLink size={10} /> Final Execution Log
-                                        </div>
-                                        <div className="opacity-80 prose prose-invert prose-xs max-w-none prose-p:leading-relaxed prose-headings:mb-2 prose-headings:mt-4">
-                                            <ReactMarkdown>{task.result}</ReactMarkdown>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                <div className="prose prose-invert prose-sm max-w-none 
+                                  prose-headings:text-white prose-headings:font-bold prose-headings:tracking-tight 
+                                  prose-p:text-zinc-400 prose-p:leading-relaxed
+                                  prose-li:text-zinc-300
+                                  prose-strong:text-cyan-400/80
+                                  selection:bg-cyan-500/20">
+                                  <ReactMarkdown>{task.result}</ReactMarkdown>
+                                </div>
+                              </div>
+                            )}
                         </motion.div>
                     ))}
                 </AnimatePresence>
-            </div>
-        </div>
+              </div>
+            </section>
+          </div>
+        </main>
 
-        {/* --- EXTREME RIGHT: NEURAL STREAM (ACTIVITY FEED) --- */}
-        {isStreamOpen && (
-            <div className="xl:col-span-3 lg:col-span-12">
-                <div className="bg-[#0D0D0D] border border-white/5 rounded-[2.5rem] h-[calc(100vh-200px)] flex flex-col sticky top-8 shadow-2xl overflow-hidden min-w-[300px] xl:min-w-0">
-                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-                    <h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-                        <Activity size={12} className="animate-pulse" /> Neural Activity Stream
-                    </h3>
-                    <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[8px] font-black text-emerald-500 uppercase">Live</span>
-                    </div>
+        {/* --- RETRACTABLE NEURAL STREAM --- */}
+        <AnimatePresence>
+          {isStreamOpen && (
+            <motion.aside 
+              initial={{ x: 320 }}
+              animate={{ x: 0 }}
+              exit={{ x: 320 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="w-80 border-l border-white/5 bg-[#0D0D0D] flex flex-col shadow-2xl relative z-20"
+            >
+              <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
+                <h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Activity size={12} className="animate-pulse" /> Activity Feed
+                </h3>
+                <div className="flex items-center gap-1">
+                  <div className="w-1 h-1 rounded-full bg-emerald-500" />
+                  <span className="text-[8px] font-bold text-zinc-500 uppercase">Live</span>
                 </div>
+              </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-[10px]">
-                    {messages.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-zinc-800 italic opacity-50">
-                            <Cpu size={24} className="mb-2" />
-                            Awaiting Neural Link...
-                        </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-[9px] scrollbar-hide">
+                {messages.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-800 italic opacity-50 px-8 text-center">
+                    <Cpu size={24} className="mb-2 opacity-10" />
+                    <p className="tracking-tight leading-relaxed">Synchronizing Neural Link...</p>
+                  </div>
+                )}
+                {messages.map((msg, i) => (
+                  <motion.div 
+                    initial={{ opacity: 0, x: 5 }} 
+                    animate={{ opacity: 1, x: 0 }} 
+                    key={msg.id} 
+                    className={cn(
+                      "p-3 rounded-lg border",
+                      msg.role === 'system' ? 'bg-cyan-500/5 border-cyan-500/10 text-cyan-200/50' : 'bg-white/[0.01] border-white/5 text-zinc-400'
                     )}
-                    {messages.map((msg, i) => (
-                        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} key={msg.id} className={`p-4 rounded-2xl border ${
-                            msg.role === 'system' ? 'bg-cyan-500/5 border-cyan-500/10 text-cyan-200/70' : 
-                            'bg-white/[0.02] border-white/5 text-zinc-400'
-                        }`}>
-                            <div className="flex items-center justify-between mb-2 opacity-60">
-                                <span className="font-black uppercase tracking-tighter text-cyan-500/50">{msg.agent_id}</span>
-                                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                            </div>
-                            <div className="prose prose-invert prose-xs max-w-none opacity-80 leading-relaxed">
-                                <ReactMarkdown>{msg.content}</ReactMarkdown>
-                            </div>
-                        </motion.div>
-                    ))}
-                    <div id="neural-stream-bottom" />
-                </div>
-                
-                </div>
-            </div>
-        )}
-      </main>
+                  >
+                    <div className="flex items-center justify-between mb-1.5 opacity-40">
+                      <span className="font-bold uppercase tracking-tighter text-[8px]">{msg.agent_id}</span>
+                      <span className="text-[7px]">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="prose prose-invert prose-xs max-w-none opacity-80 leading-relaxed text-[10px] font-sans">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  </motion.div>
+                ))}
+                <div id="neural-stream-bottom" />
+              </div>
 
+              <div className="p-3 border-t border-white/5 bg-black/40">
+                <div className="flex items-center gap-2 text-zinc-700 px-2 py-1">
+                  <Loader2 size={10} className="animate-spin" />
+                  <span className="text-[8px] font-black uppercase tracking-widest">Listening...</span>
+                </div>
+              </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

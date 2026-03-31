@@ -15,6 +15,7 @@ import {
   Briefcase,
   Trash2
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface SOP {
   id?: string;
@@ -114,23 +115,27 @@ export default function SOPSPage() {
   );
 
   return (
-    <div className="flex-1 h-screen bg-[#0A0A0A] text-white flex flex-col overflow-hidden">
+    <div className="flex-1 h-screen bg-[#050505] text-white flex flex-col overflow-hidden font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
       {/* Header Area */}
-      <header className="px-8 py-10 border-b border-white/5 flex items-center justify-between">
+      <header className="px-10 py-12 border-b border-white/[0.03] flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/40 bg-clip-text text-transparent italic">
-            Standard Operating Procedures
+          <div className="flex items-center gap-2.5 text-cyan-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">
+            <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
+            Semantic Engine: <span className="text-white">Indexed</span>
+          </div>
+          <h1 className="text-6xl font-black tracking-[-0.05em] italic bg-gradient-to-b from-white via-white to-white/20 bg-clip-text text-transparent uppercase">
+            Knowledge Base
           </h1>
-          <p className="text-zinc-500 text-sm mt-1 uppercase tracking-widest font-medium">MIRROR KNOWLEDGE BASE</p>
+          <p className="text-zinc-500 text-xs font-bold mt-4 uppercase tracking-widest italic leading-relaxed">Standard Operating Procedures & Intelligence Assets</p>
         </div>
         
         {!isEditing && (
           <button 
             onClick={openNewSOP}
-            className="bg-cyan-400 text-black px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+            className="bg-white text-black px-8 py-4 rounded-2xl font-black text-[12px] uppercase tracking-[0.3em] flex items-center gap-3 hover:bg-cyan-500 hover:text-white transition-all shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
           >
             <Plus size={20} strokeWidth={3} />
-            AGGIUNGI PROCEDURA
+            AUTHOR_PROTOCOL
           </button>
         )}
       </header>
@@ -242,51 +247,60 @@ export default function SOPSPage() {
             )}
 
             {/* SOP List Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto anime-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto pb-20">
               {filteredSops.map((sop) => (
-                <div 
+                <motion.div 
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   key={sop.id} 
-                  className="group bg-white/5 border border-white/10 rounded-3xl p-6 hover:bg-white/10 hover:border-cyan-400/50 transition-all cursor-pointer relative overflow-hidden"
+                  className="group bg-zinc-950/40 backdrop-blur-3xl border border-white/[0.05] rounded-[3rem] p-10 hover:bg-white/[0.04] hover:border-cyan-500/30 transition-all cursor-pointer relative overflow-hidden shadow-2xl"
                   onClick={() => {
                     setCurrentSOP(sop);
                     setIsEditing(true);
                   }}
                 >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 group-hover:bg-cyan-400/10 group-hover:border-cyan-400/20 transition-all">
-                      <Shield size={24} className="text-zinc-400 group-hover:text-cyan-400 transition-all" />
+                  <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <Shield size={80} />
+                  </div>
+
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 group-hover:bg-cyan-500/10 group-hover:border-cyan-500/20 transition-all shadow-inner">
+                      <FileText size={28} className="text-zinc-600 group-hover:text-cyan-500 transition-all" />
                     </div>
                     <div className="flex items-center gap-2">
-                       <span className="px-2 py-1 bg-white/5 border border-white/10 rounded-md text-[10px] uppercase tracking-tighter text-zinc-500 font-bold">
+                       <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] uppercase tracking-widest text-zinc-500 font-black italic">
                         V{sop.version}
                        </span>
-                       <span className="px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-[10px] uppercase tracking-tighter text-emerald-400 font-bold">
+                       <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[9px] uppercase tracking-widest text-emerald-400 font-black italic">
                         {sop.status}
                        </span>
                     </div>
                   </div>
                   
-                  <h3 className="text-xl font-bold group-hover:text-cyan-400 transition-all mb-2 truncate pr-6">{sop.title}</h3>
-                  <div className="flex items-center gap-4 text-xs text-zinc-500 font-medium">
-                    <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                      <Briefcase size={12} /> {sop.department}
+                  <h3 className="text-2xl font-black italic group-hover:text-cyan-400 transition-all mb-4 uppercase leading-tight">{sop.title}</h3>
+                  <div className="flex items-center gap-6 text-[10px] text-zinc-500 font-black uppercase tracking-widest italic pt-6 border-t border-white/[0.03]">
+                    <span className="flex items-center gap-2">
+                      <Briefcase size={14} className="text-zinc-700" /> {sop.department}
                     </span>
-                    <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                      <Clock size={12} /> {new Date(sop.last_updated).toLocaleDateString()}
+                    <span className="flex items-center gap-2">
+                      <Clock size={14} className="text-zinc-700" /> {new Date(sop.last_updated).toLocaleDateString()}
                     </span>
                   </div>
 
-                  <ChevronRight size={24} className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-800 group-hover:text-cyan-400 group-hover:translate-x-2 transition-all" />
-                  
-                  {/* Delete Button */}
-                  <button
-                    onClick={(e) => handleDelete(sop.id!, e)}
-                    className="absolute bottom-6 right-6 p-2 text-zinc-800 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all z-20"
-                    title="Elimina SOP"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                  <div className="absolute bottom-10 right-10 flex items-center gap-4">
+                    <button
+                      onClick={(e) => handleDelete(sop.id!, e)}
+                      className="p-3 text-zinc-800 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all z-20 group/del"
+                      title="Elimina SOP"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-800 group-hover:text-cyan-400 group-hover:bg-white/10 transition-all">
+                      <ChevronRight size={24} />
+                    </div>
+                  </div>
+                </motion.div>
               ))}
             </div>
           </>

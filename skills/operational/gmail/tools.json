@@ -1,0 +1,55 @@
+[
+  {
+    "name": "gmail:list_messages",
+    "description": "Cerca e elenca le email recenti per un query specificato (es. 'from:boss@example.com').",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Termini di ricerca (usa 'newer_than:2d' o 'newer_than:7d' per le email recenti, evita ricerche esatte per data perché spesso falliscono)."
+        },
+        "maxResults": {
+          "type": "number",
+          "description": "Numero massimo di email (default: 10)."
+        }
+      }
+    }
+  },
+  {
+    "name": "gmail:get_message",
+    "description": "Recupera il contenuto completo di un'email specifica tramite il suo ID.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "L'ID univoco dell'email."
+        }
+      },
+      "required": ["messageId"]
+    }
+  },
+  {
+    "name": "gmail:send_email",
+    "description": "Invia una nuova email a un destinatario specificato.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "to": {
+          "type": "string",
+          "description": "Indirizzo email del destinatario."
+        },
+        "subject": {
+          "type": "string",
+          "description": "Oggetto dell'email."
+        },
+        "body": {
+          "type": "string",
+          "description": "Corpo del messaggio (testo piano)."
+        }
+      },
+      "required": ["to", "subject", "body"]
+    }
+  }
+]

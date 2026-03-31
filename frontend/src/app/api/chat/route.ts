@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const response = await animaChat({
       agentId,
       messages,
-      system: agentInfo.systemPrompt
+      systemPrompt: agentInfo.system_prompt
     });
 
     return NextResponse.json({ 

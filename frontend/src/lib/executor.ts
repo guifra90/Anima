@@ -48,8 +48,16 @@ export async function runTaskExecution(taskId: string) {
       IL TUO COMPITO SPECIFICO: ${task.description}
       
       ESECUZIONE: 
-      Basandoti sul tuo ruolo (${agent.role}), esegui il compito e restituisci un report dettagliato dell'attività svolta. 
-      Sii professionale, autorevole e focalizzato sui risultati concreti.
+      Basandoti sul tuo ruolo (${agent.role}), esegui il compito. 
+      ATTENZIONE: Utilizza i TOOL a tua disposizione (es. Gmail, Calendar) per estrarre DATI REALI. 
+      NON SIMULARE dati se puoi accedere a informazioni vere.
+      
+      REGOLE DI FORMATTAZIONE FINALE:
+      1. PROTOCOLLO SILENZIO TOOL: Mentre stai usando i tool (Gmail, Calendar, ecc.), NON generare alcun report parziale o introduzione testuale. Rispondi SOLO con la chiamata al tool.
+      2. REPORT UNICO: Aspetta di aver raccolto TUTTI i dati necessari. Solo nell'ultimo turno, quando hai tutte le informazioni, genera un UNICO report finale pulito, coeso e altamente professionale in Markdown.
+      3. PULIZIA: NON includere nel testo finale i log tecnici o le stringhe '[CALL: ...]'.
+      4. NESSUNA PIGRIZIA: NON usare 'Vedi sopra'. Scrivi ogni sezione (Email, Calendario, Brief) in modo completo ed elegante.
+      5. PRECISIONE TEMPORALE: Se chiedi il calendario di 'questa settimana', calcola la fine (7 giorni da oggi) e usa 'timeMax'. Non estrarre dati oltre il periodo richiesto.
     `;
 
     // 5. Chiamata al bridge AI (Agnostico)

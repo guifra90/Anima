@@ -20,6 +20,8 @@ export interface AgentInfo {
   reports_to?: string;
   directives?: string;
   traits?: string[];
+  skills?: string[];
+  active_connections?: string[];
   created_at?: string;
 }
 
@@ -58,6 +60,24 @@ export interface Task {
   order_index: number;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface Connection {
+  id: string;
+  type: 'gmail' | 'gcal' | 'scoro';
+  name: string;
+  credentials: any;
+  user_id: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  namespace: string;
+  description: string;
+  tools: any[];
 }
 
 
@@ -101,6 +121,7 @@ export async function listAllAgents(): Promise<AgentInfo[]> {
  */
 export async function createAgent(agentData: Partial<AgentInfo>) {
   const dataToInsert: any = { ...agentData };
+  delete dataToInsert.active_connections;
   
   // Sanitize empty strings to null for nullable foreign keys
   if (dataToInsert.reports_to === "") dataToInsert.reports_to = null;
@@ -117,6 +138,11 @@ export async function createAgent(agentData: Partial<AgentInfo>) {
     throw error;
   }
 
+  // Handle connection syncing if provided
+  if (agentData.active_connections) {
+    await syncAgentConnections(data.id, agentData.active_connections);
+  }
+
   return data;
 }
 
@@ -125,6 +151,7 @@ export async function createAgent(agentData: Partial<AgentInfo>) {
  */
 export async function updateAgent(id: string, agentData: Partial<AgentInfo>) {
   const dataToUpdate: any = { ...agentData };
+  delete dataToUpdate.active_connections;
 
   // Sanitize empty strings to null for nullable foreign keys
   if (dataToUpdate.reports_to === "") dataToUpdate.reports_to = null;
@@ -140,6 +167,11 @@ export async function updateAgent(id: string, agentData: Partial<AgentInfo>) {
   if (error) {
     console.error("[ANIMA LIB] Errore aggiornamento agente:", error.message);
     throw error;
+  }
+
+  // Handle connection syncing if provided
+  if (agentData.active_connections) {
+    await syncAgentConnections(id, agentData.active_connections);
   }
 
   return data;
@@ -343,6 +375,52 @@ export async function updateConfig(key: string, value: any) {
     throw error;
   }
   return data;
+}
+
+
+/** --- CONNECTIONS --- **/
+
+export async function listConnections(): Promise<Connection[]> {
+  const { data, error } = await supabase.from('anima_connections').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error("[ANIMA LIB] Error listing connections:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function createConnection(conn: Partial<Connection>) {
+  const { data, error } = await supabase.from('anima_connections').insert([conn]).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteConnection(id: string) {
+  const { error } = await supabase.from('anima_connections').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** --- AGENT CONNECTIONS --- **/
+
+export async function listAgentConnections(agentId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('anima_agent_connections')
+    .select('connection_id')
+    .eq('agent_id', agentId);
+  
+  if (error) return [];
+  return data.map(d => d.connection_id);
+}
+
+export async function syncAgentConnections(agentId: string, connectionIds: string[]) {
+  // First delete existing
+  await supabase.from('anima_agent_connections').delete().eq('agent_id', agentId);
+  
+  if (connectionIds.length === 0) return;
+
+  const toInsert = connectionIds.map(id => ({ agent_id: agentId, connection_id: id }));
+  const { error } = await supabase.from('anima_agent_connections').insert(toInsert);
+  if (error) throw error;
 }
 
 

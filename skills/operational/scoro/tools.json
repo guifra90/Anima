@@ -1,0 +1,47 @@
+[
+  {
+    "name": "scoro:get_project_status",
+    "description": "Recupera lo stato attuale, il budget e la scadenza di un progetto specifico da Scoro.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "description": "L'ID univoco del progetto in Scoro (es. 'P-1234')."
+        }
+      },
+      "required": ["projectId"]
+    }
+  },
+  {
+    "name": "scoro:list_projects",
+    "description": "Elenca i progetti recenti per monitorare lo stato generale dell'agenzia.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "number",
+          "description": "Numero massimo di progetti da recuperare (default: 5)."
+        }
+      }
+    }
+  },
+  {
+    "name": "scoro:get_tasks",
+    "description": "Recupera la lista dei task per un progetto, evidenziando quelli in ritardo.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "description": "L'ID univoco del progetto."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Numero massimo di task da recuperare (default: 10)."
+        }
+      },
+      "required": ["projectId"]
+    }
+  }
+]
