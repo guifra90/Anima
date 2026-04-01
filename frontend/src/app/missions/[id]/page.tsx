@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, Target, Clock, CheckCircle2, AlertCircle, ChevronLeft, 
   LayoutDashboard, Search, Filter, MoreVertical, Loader2, Bot, Sparkles, Send,
-  Cpu, User, Calendar, Play, Pause, Square, ExternalLink, Activity
+  Cpu, User, Calendar, Play, Pause, Square, ExternalLink, Activity, Zap,
+  RotateCcw, XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -19,6 +20,7 @@ interface Mission {
   title: string;
   objective: string;
   status: 'planning' | 'active' | 'completed' | 'cancelled';
+  execution_mode?: 'manual' | 'autonomous';
   created_at: string;
 }
 
@@ -125,7 +127,7 @@ export default function MissionDetailPage() {
     }
   }, [messages]);
 
-  const runTask = async (taskId: string) => {
+  const runTask = useCallback(async (taskId: string) => {
     setExecutingTaskId(taskId);
     try {
       const res = await fetch('/api/tasks/run', {
@@ -143,7 +145,26 @@ export default function MissionDetailPage() {
     } finally {
       setExecutingTaskId(null);
     }
-  };
+  }, []);
+
+  // --- AUTO-PILOT IGNITION SYSTEM ---
+  // If autonomous and no task is running, start the first pending task
+  useEffect(() => {
+    if (!mission || mission.execution_mode !== 'autonomous' || tasks.length === 0 || loading || executingTaskId) return;
+
+    const isAnyRunning = tasks.some(t => t.status === 'running');
+    if (isAnyRunning) return;
+
+    // Find the first task that is pending (sequential order)
+    const nextTask = [...tasks]
+      .sort((a, b) => a.order_index - b.order_index)
+      .find(t => t.status === 'pending');
+
+    if (nextTask) {
+      console.log("[Auto-Pilot] Autonomous Ignition: Starting task", nextTask.id);
+      runTask(nextTask.id);
+    }
+  }, [mission, tasks, loading, executingTaskId, runTask]);
 
   const updateTaskStatus = async (taskId: string, status: string) => {
     setIsUpdating(true);
@@ -156,6 +177,76 @@ export default function MissionDetailPage() {
       // Realtime will update the list
     } catch (err) {
       console.error("Error updating task status", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const toggleExecutionMode = async () => {
+    if (!mission) return;
+    const newMode = mission.execution_mode === 'autonomous' ? 'manual' : 'autonomous';
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('anima_missions')
+        .update({ execution_mode: newMode })
+        .eq('id', id);
+      
+      if (error) throw error;
+      setMission({ ...mission, execution_mode: newMode });
+    } catch (err) {
+      console.error("Error toggling execution mode", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const cancelMission = async () => {
+    if (!confirm("Sei sicuro di voler cancellare questa missione?")) return;
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('anima_missions')
+        .update({ status: 'cancelled' })
+        .eq('id', id);
+      
+      if (error) throw error;
+      setMission(prev => prev ? ({ ...prev, status: 'cancelled' }) : null);
+    } catch (err) {
+      console.error("Error cancelling mission", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const restartMission = async () => {
+    if (!confirm("Questo resetterà tutti i task e riavvierà l'Auto-Pilot. Continuare?")) return;
+    setIsUpdating(true);
+    try {
+      // 1. Reset mission status
+      const { error: mError } = await supabase
+        .from('anima_missions')
+        .update({ status: 'active' })
+        .eq('id', id);
+      
+      if (mError) throw mError;
+
+      // 2. Clear task progress and reset to pending
+      const { error: tError } = await supabase
+        .from('anima_tasks')
+        .update({ 
+          status: 'pending', 
+          result: null 
+        })
+        .eq('mission_id', id);
+      
+      if (tError) throw tError;
+
+      // Refresh local state will be handled by Realtime for tasks, 
+      // but we update mission immediately
+      setMission(prev => prev ? ({ ...prev, status: 'active' }) : null);
+    } catch (err) {
+      console.error("Error restarting mission", err);
     } finally {
       setIsUpdating(false);
     }
@@ -207,6 +298,26 @@ export default function MissionDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={toggleExecutionMode}
+            disabled={isUpdating}
+            className={cn(
+              "flex items-center gap-2 px-4 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-wider",
+              mission.execution_mode === 'autonomous' 
+                ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]" 
+                : "bg-white/5 border-white/10 text-zinc-500 hover:border-white/20"
+            )}
+          >
+            {mission.execution_mode === 'autonomous' ? (
+              <Zap size={12} className="fill-current animate-pulse" />
+            ) : (
+              <User size={12} />
+            )}
+            {mission.execution_mode === 'autonomous' ? 'Auto-Pilot On' : 'Manual Mode'}
+          </button>
+
+          <div className="h-4 w-px bg-white/10 mx-1" />
+
           <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400">
             <CheckCircle2 size={12} className="text-emerald-500" />
             <span className="text-zinc-200">{tasks.filter(t => t.status === 'completed').length}</span>
@@ -223,6 +334,27 @@ export default function MissionDetailPage() {
             <Activity size={12} className={isStreamOpen ? 'animate-pulse' : ''} />
             Stream
           </button>
+
+          <div className="h-4 w-px bg-white/10 mx-1" />
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={restartMission}
+              disabled={isUpdating}
+              className="p-2 bg-white/5 border border-white/10 rounded-lg text-emerald-500/60 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+              title="Restart Mission"
+            >
+              <RotateCcw size={14} />
+            </button>
+            <button
+              onClick={cancelMission}
+              disabled={isUpdating}
+              className="p-2 bg-white/5 border border-white/10 rounded-lg text-red-500/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Cancel Mission"
+            >
+              <XCircle size={14} />
+            </button>
+          </div>
         </div>
       </header>
 

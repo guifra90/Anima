@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Target, Clock, CheckCircle2, AlertCircle, ChevronLeft, 
   LayoutDashboard, Search, Filter, MoreVertical, Loader2, Bot, Sparkles, Send,
-  User
+  User, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -23,7 +24,8 @@ export default function NewMissionPage() {
   const [mission, setMission] = useState({
     title: '',
     objective: '',
-    plannerAgentId: ''
+    plannerAgentId: '',
+    execution_mode: 'manual' as 'manual' | 'autonomous'
   });
 
   useEffect(() => {
@@ -132,6 +134,53 @@ export default function NewMissionPage() {
                         onChange={e => setMission({...mission, objective: e.target.value})}
                     />
                     <p className="text-[9px] text-zinc-600 italic ml-1">Essere chiari e specifici aiuta l'Orchestratore a definire un piano d'azione accurato.</p>
+                </div>
+
+                {/* --- EXECUTION MODE SELECTOR --- */}
+                <div className="space-y-6 pt-4">
+                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Execution Architecture</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setMission({...mission, execution_mode: 'manual'})}
+                      className={cn(
+                        "p-6 rounded-3xl border transition-all text-left group relative overflow-hidden",
+                        mission.execution_mode === 'manual' 
+                          ? "bg-white/10 border-white/20 ring-1 ring-white/20" 
+                          : "bg-white/[0.02] border-white/5 hover:bg-white/5"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <User size={16} className={mission.execution_mode === 'manual' ? "text-white" : "text-zinc-600"} />
+                        <span className="text-xs font-black italic uppercase tracking-wider">Manual</span>
+                      </div>
+                      <p className="text-[9px] text-zinc-500 leading-relaxed italic">L'utente deve autorizzare manualmente ogni singolo task della missione.</p>
+                      {mission.execution_mode === 'manual' && <div className="absolute top-2 right-4 text-cyan-400 font-black text-[8px]">ACTIVE</div>}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMission({...mission, execution_mode: 'autonomous'})}
+                      className={cn(
+                        "p-6 rounded-3xl border transition-all text-left group relative overflow-hidden",
+                        mission.execution_mode === 'autonomous' 
+                          ? "bg-cyan-500/10 border-cyan-500/30 ring-1 ring-cyan-500/20" 
+                          : "bg-white/[0.02] border-white/5 hover:bg-white/5"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <Zap size={16} className={mission.execution_mode === 'autonomous' ? "text-cyan-400" : "text-zinc-600"} />
+                        <span className="text-xs font-black italic uppercase tracking-wider">Auto-Pilot</span>
+                      </div>
+                      <p className="text-[9px] text-zinc-500 leading-relaxed italic">I task vengono concatenati automaticamente. L'AI prosegue fino a obiettivo raggiunto.</p>
+                      {mission.execution_mode === 'autonomous' && (
+                        <>
+                          <div className="absolute top-2 right-4 text-cyan-400 font-black text-[8px] animate-pulse">AUTONOMOUS</div>
+                          <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-cyan-400/10 blur-xl rounded-full" />
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
             </div>
 

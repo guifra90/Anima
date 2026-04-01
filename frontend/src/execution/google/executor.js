@@ -4,14 +4,26 @@ const gcal = require('./gcal');
 
 /**
  * Main dispatcher for Google Tools.
- * Each toolName follows the convention "service:method" (e.g., gmail:send_email).
+ * 
+ * Accepts both formats for full model-agnostic compatibility:
+ * - "gmail:list_messages"  (canonical ANIMA namespace format)
+ * - "gmail__list_messages" (OpenRouter/Gemini wire format)
+ * - "list_messages"        (legacy bare method format)
  */
 async function run(toolName, args, encryptedCredentials) {
   const auth = await getAuthenticatedClient(encryptedCredentials);
 
-  console.log(`[GOOGLE-EXECUTOR] Running tool: ${toolName}`, args);
+  // Normalize: strip namespace prefix if present (handles ':', '__', or bare method)
+  // e.g. "gmail:list_messages" -> "list_messages"
+  // e.g. "gmail__list_messages" -> "list_messages"
+  // e.g. "gcal:create_event"  -> "create_event"
+  const normalizedName = toolName
+    .replace(/^(gmail|gcal)[_:]+/, '')  // Strip namespace prefix
+    .replace(/__/g, '_');               // Normalize double underscore to single
 
-  switch (toolName) {
+  console.log(`[GOOGLE-EXECUTOR] Running tool: "${toolName}" -> normalized: "${normalizedName}"`, args);
+
+  switch (normalizedName) {
     // Gmail Tools
     case 'list_messages':
       return await gmail.listMessages(auth, args);
@@ -27,7 +39,7 @@ async function run(toolName, args, encryptedCredentials) {
       return await gcal.createEvent(auth, args);
 
     default:
-      throw new Error(`TOOL_NOT_IMPLEMENTED: google:${toolName}`);
+      throw new Error(`TOOL_NOT_IMPLEMENTED: "${toolName}" (normalized: "${normalizedName}")`);
   }
 }
 

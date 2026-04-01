@@ -1,5 +1,10 @@
 import { supabase } from './supabase';
 import { getEmbedding } from './embedding';
+import { 
+  updateMission as persistUpdateMission, 
+  updateTask as persistUpdateTask, 
+  createMessage as persistCreateMessage 
+} from './anima-persistence';
 
 /**
  * ANIMA Bridge — Gestisce l'accesso agli agenti nel DB
@@ -44,6 +49,8 @@ export interface Mission {
   title: string;
   objective: string;
   status: 'planning' | 'active' | 'completed' | 'cancelled';
+  execution_mode?: 'manual' | 'autonomous';
+  is_locked?: boolean;
   plannerAgentId?: string;
   created_at?: string;
   updated_at?: string;
@@ -56,6 +63,7 @@ export interface Task {
   title: string;
   description?: string;
   status: 'pending' | 'running' | 'completed' | 'error' | 'blocked';
+  requires_approval?: boolean;
   result?: string;
   order_index: number;
   created_at?: string;
@@ -273,9 +281,7 @@ export async function createMission(mission: Partial<Mission>) {
 }
 
 export async function updateMission(id: string, missionData: Partial<Mission>) {
-  const { data, error } = await supabase.from('anima_missions').update(missionData).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
+  return persistUpdateMission(id, missionData);
 }
 
 export async function deleteMission(id: string) {
@@ -302,9 +308,7 @@ export async function createTask(task: Partial<Task>) {
 }
 
 export async function updateTask(id: string, taskData: Partial<Task>) {
-  const { data, error } = await supabase.from('anima_tasks').update(taskData).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
+  return persistUpdateTask(id, taskData);
 }
 
 export async function deleteTask(id: string) {
@@ -322,17 +326,7 @@ export async function createMessage(msg: {
   content: string;
   metadata?: any;
 }) {
-  const { data, error } = await supabase
-    .from('anima_messages')
-    .insert([msg])
-    .select()
-    .single();
-
-  if (error) {
-    console.error("[ANIMA LIB] Error creating message:", error.message);
-    throw error;
-  }
-  return data;
+  return persistCreateMessage(msg);
 }
 
 export async function listMessagesByMission(missionId: string) {
@@ -459,10 +453,11 @@ async function searchKnowledge(query: string) {
  * In v2, non chiama più Gemini direttamente ma usa il bridge API locale (/api/ai/chat).
  * Questo permette di essere totalmente indipendenti dal modello (Ollama, Claude, Gemini, etc).
  */
-export async function animaChat({ agentId, messages, systemPrompt: overrideSystemPrompt }: { 
+export async function animaChat({ agentId, messages, systemPrompt: overrideSystemPrompt, missionId }: { 
   agentId: string, 
   messages: { role: 'user' | 'assistant', content: string }[],
-  systemPrompt?: string
+  systemPrompt?: string,
+  missionId?: string
 }) {
   try {
     // 1. RAG (eseguito sul frontend se possibile)
@@ -483,7 +478,8 @@ export async function animaChat({ agentId, messages, systemPrompt: overrideSyste
       const result = await executeAiChat({
         agentId,
         messages,
-        systemPrompt
+        systemPrompt,
+        missionId
       });
       return result.content;
     }
@@ -495,7 +491,8 @@ export async function animaChat({ agentId, messages, systemPrompt: overrideSyste
       body: JSON.stringify({
         agentId,
         messages,
-        systemPrompt
+        systemPrompt,
+        missionId
       })
     });
 

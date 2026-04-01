@@ -10,6 +10,7 @@ import {
   Cpu,
   ChevronRight,
   PlusCircle,
+  Plus,
   Users,
   Workflow,
   Database
@@ -75,7 +76,16 @@ export default function MissionControl() {
           </h1>
         </div>
         
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          <Link 
+              href="/missions/new" 
+              className="group relative flex items-center gap-3 bg-white text-black px-6 py-4 rounded-2xl font-black text-[10px] hover:scale-105 active:scale-95 transition-all shadow-[0_10px_30px_rgba(255,255,255,0.1)] italic mr-4"
+          >
+              <Plus size={14} strokeWidth={3} />
+              INITIALIZE_MISSION
+              <div className="absolute inset-0 bg-cyan-400 rounded-2xl blur-[15px] opacity-0 group-hover:opacity-20 transition-opacity" />
+          </Link>
+
           <div className="px-6 py-3 bg-white/[0.02] border border-white/5 rounded-2xl backdrop-blur-3xl flex items-center gap-4 hover:bg-white/[0.04] transition-all">
             <div className="flex flex-col">
               <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-[0.2em] mb-1">Mirror Heartbeat</p>
@@ -144,11 +154,13 @@ export default function MissionControl() {
                   </div>
                 </Link>
               )) : (
-                <div className="col-span-2 p-16 border border-dashed border-white/10 rounded-[3rem] flex flex-col items-center justify-center text-zinc-700 bg-white/[0.01]">
-                  <PlusCircle size={56} strokeWidth={1} className="mb-6 opacity-20" />
-                  <p className="font-black uppercase tracking-[0.3em] text-[11px] mb-2">Null_Missions_Detected</p>
-                  <p className="text-[10px] font-bold text-zinc-600 italic">Initiate new orchestration sequence to begin.</p>
-                </div>
+                <Link href="/missions/new" className="col-span-2 group">
+                  <div className="p-16 border border-dashed border-white/10 rounded-[3rem] flex flex-col items-center justify-center text-zinc-700 bg-white/[0.01] group-hover:border-cyan-500/30 group-hover:bg-cyan-500/[0.02] transition-all">
+                    <PlusCircle size={56} strokeWidth={1} className="mb-6 opacity-20 group-hover:opacity-40 group-hover:text-cyan-400 transition-all" />
+                    <p className="font-black uppercase tracking-[0.3em] text-[11px] mb-2">Null_Missions_Detected</p>
+                    <p className="text-[10px] font-bold text-zinc-600 italic">Initiate new orchestration sequence to begin.</p>
+                  </div>
+                </Link>
               )}
             </div>
           </section>

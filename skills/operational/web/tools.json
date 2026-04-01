@@ -1,0 +1,52 @@
+[
+  {
+    "name": "web:search",
+    "description": "Search the public internet for a given topic or query. Returns a list of relevant URLs with titles and snippets. Use this to find sources before fetching their content.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query (e.g., 'artificial intelligence news this week', 'Gemini 2.0 release')."
+        },
+        "maxResults": {
+          "type": "number",
+          "description": "Maximum number of results to return (default: 5, max: 10)."
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "web:fetch",
+    "description": "Fetch and read the full text content of a public URL. Converts the HTML page into clean, readable Markdown. Use this after web:search to read full articles.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The full URL of the page to fetch (e.g., 'https://techcrunch.com/article-name')."
+        }
+      },
+      "required": ["url"]
+    }
+  },
+  {
+    "name": "web:news",
+    "description": "Search specifically for recent news articles on a topic. Returns headlines and summaries from news sources. Ideal for market intelligence and trend monitoring.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "The news topic to search for (e.g., 'AI startup funding', 'GPT-5 release')."
+        },
+        "language": {
+          "type": "string",
+          "description": "Language of the news results: 'it' for Italian, 'en' for English (default: 'en')."
+        }
+      },
+      "required": ["topic"]
+    }
+  }
+]

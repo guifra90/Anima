@@ -7,7 +7,7 @@ import { executeAiChat } from '@/lib/ai-bridge-server';
  */
 export async function POST(req: Request) {
   try {
-    const { agentId, messages, systemPrompt, options = {} } = await req.json();
+    const { agentId, messages, systemPrompt, missionId, options = {} } = await req.json();
 
     if (!agentId) {
       return NextResponse.json({ error: "agentId missing" }, { status: 400 });
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       agentId,
       messages,
       systemPrompt,
+      missionId,
       options
     });
 

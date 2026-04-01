@@ -5,14 +5,14 @@
 - **Zero Human Agency**: L'obiettivo finale è una piattaforma professionale, performante e autonoma che dia risultati concreti.
 - **Flessibilità dei Modelli**: Supporto multi-adapter. Possibilità di assegnare modelli diversi ad agenti diversi (es. CEO su Ollama, CFO su Claude, Creative su Gemini).
 
-## 🟢 Status Attuale (Sessione 31-03-2026 Conclusa)
+## 🟢 Status Attuale (Sessione 01-04-2026 Conclusa)
 - Mission Control: **OPERATIVO** (Esecuzione task e navigazione dettaglio ripristinata)
 - Dashboard UI: **OPERATIVO** (Grid system V2, Link funzionali)
 - Governance: **OPERATIVO** (Directives, Traits e Constitution implementati)
 - Team / Hiring Hall: **OPERATIVO** (Organigramma ripristinato, UI V2 Premium)
 - Tooling & Skills: **OPERATIVO** (Skill Management UI, multi-account connections, secure encryption)
-- AI Core: **OPERATIVO** (Dynamic decryption, real tool executions for Scoro)
-- Zero-Human Engine: **PRONTO** (Output completi fino a 8000 tokens)
+- AI Core & Bridge: **STABILIZZATO** (V3.2: Neural Consolidation & Fingerprinting)
+- Zero-Human Engine: **ROBUSTO** (Consolidamento report multi-turno e protezione anti-loop)
 
 ---
 
@@ -20,7 +20,7 @@
 
 ### 1. Interattività & Autonomous Logic
 - [ ] **Hybrid Execution Engine**: Implementare la possibilità di scegliere tra esecuzione "MANUALE" (step-by-step come ora) e "AUTONOMA" (Auto-Pilot) per ogni missione.
-- [ ] **Autonomous Loop**: Logica di concatenamento automatico dei task per le missioni in modalità Auto-Pilot.
+- [/] **Autonomous Loop**: Logica di concatenamento automatico dei task (V3.2 Bridge logic completata).
 - [ ] **Sistema di Notifiche**: Notifiche istantanee (UI/Browser) al completamento o in caso di richiesta di intervento umano.
 - [ ] **Human-in-the-loop**: Blocchi di sicurezza per conferme esplicite su azioni critiche o distruttive.
 
@@ -37,13 +37,14 @@
 ---
 
 ## 📝 Changelog Recente
-- **2026-03-31 (Oggi)**:
-    - **Mission Detail Restoration**: Ripristinata la navigazione dalle card della dashboard e fatto l'overhaul estetico della pagina `/missions/[id]`.
-    - **Org Chart Restoration**: Reintegrata la visualizzazione gerarchica nella Hiring Hall con toggle GRID/ORG e stile "Paperclip V2".
-    - **UI/UX Polish**: Applicato il design system V2 a tutte le rotte principali (Team, Agents, SOPs, Governance, Departments, Settings).
-    - **Skill Management**: Portato a termine il sistema di assegnazione toolset (Skills) agli agenti via UI.
-    - **Multi-Account/Connections**: Implementata la gestione sicura dell'identità esterna (Scoro, Google) con protezione AES-256 e RLS. 
-    - **AI Bridge**: Refactoring completo per supportare la decriptazione dinamica delle chiavi API durante l'esecuzione del task.
+- **2026-04-01 (Oggi)**:
+    - **V3.1 Emergency Fix**: Risolta la dipendenza circolare (deadlock) tra `anima.ts` e `ai-bridge-server.ts`. Creato `anima-persistence.ts` per isolare le operazioni DB.
+    - **V3.2 Neural Bridge Consolidation**: 
+        - Implementato **Neural Accumulator**: ora i report vengono consolidati attraverso tutti i turni dell'agente (risolto il problema del report "punto 5").
+        - Implementato **Tool Fingerprinting**: previene la creazione di duplicati (es. eventi calendario doppi) scartando chiamate identiche nello stesso ciclo.
+        - **Paperclip-style Directives**: Aggiunto avviso di terminazione automatica al 4° turno per guidare l'agente alla chiusura.
+    - **Stability**: Migliorata la robustezza del loop autonomo per missioni multi-task senza supervisione.
+- **2026-03-31**:
 - **2026-03-30**:
     - **Mission Execution**: Test end-to-end completato con successo. Risolto troncamento report (max_tokens: 8000).
     - **Dashboard**: Refactoring totale della UI in grid system a 12 colonne. Risolte sovrapposizioni su schermi piccoli.

@@ -528,15 +528,30 @@ export default function HiringHall() {
       {/* --- HIRING / EDIT MODAL --- */}
       <AnimatePresence>
         {isHiringModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-end p-6 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-end p-6 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setIsHiringModalOpen(false); }}>
             <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="w-full max-w-xl h-full bg-[#0E0E0E] rounded-[3rem] border-l border-white/10 shadow-2xl overflow-hidden flex flex-col">
-              <div className="bg-white/[0.02] border-b border-white/5 flex px-8 overflow-x-auto scrollbar-hide">
+              {/* Header: Title + X button — always visible, never scrolled */}
+              <div className="flex items-center justify-between px-8 pt-6 pb-4 shrink-0">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">
+                  {isEditMode ? '✦ EDIT AGENT' : '✦ HIRE AGENT'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsHiringModalOpen(false)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 border border-white/10 text-zinc-500 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all"
+                  title="Chiudi pannello"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {/* Tabs row — scrollable independently */}
+              <div className="border-b border-white/5 flex px-8 overflow-x-auto scrollbar-hide shrink-0">
                 {['identity', 'traits', 'directives', 'skills', 'connections'].map((tab) => (
                   <button 
                     key={tab}
                     type="button" 
                     onClick={() => setActiveModalTab(tab as any)}
-                    className={`px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 whitespace-nowrap ${activeModalTab === tab ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-zinc-600 hover:text-zinc-400'}`}
+                    className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 whitespace-nowrap ${activeModalTab === tab ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-zinc-600 hover:text-zinc-400'}`}
                   >
                     {tab}
                   </button>

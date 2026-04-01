@@ -3,7 +3,8 @@ import {
   getAgentInfo, 
   getMission, 
   createMessage, 
-  animaChat 
+  animaChat,
+  listMessagesByMission
 } from './anima';
 
 /**
@@ -40,24 +41,40 @@ export async function runTaskExecution(taskId: string) {
       metadata: { type: 'execution_start', taskId }
     });
 
+    // 3.5. Recupero Work Products (Punti di Controllo) - Paperclip style
+    // Recuperiamo i risultati consolidati dei task già completati per costruire il "Manifest" della missione.
+    const { data: completedTasks } = await (await import('./supabase')).supabase
+      .from('anima_tasks')
+      .select('title, result')
+      .eq('mission_id', task.mission_id)
+      .eq('status', 'completed')
+      .order('order_index', { ascending: true });
+
+    let missionManifest = "";
+    if (completedTasks && completedTasks.length > 0) {
+      missionManifest = "\n# [MISSION CONTEXT MANIFEST]\n" + 
+        "Questi sono i risultati consolidati dei task precedenti. Considerali memorizzati e NON ripeterli.\n\n" +
+        completedTasks.map(ct => `## ARTIFACT: ${ct.title}\n${ct.result}`).join("\n\n---\n\n");
+    }
+
     // 4. Preparazione Prompt Strategico
     // Uniamo l'obiettivo della missione con la descrizione specifica del task
     const executionPrompt = `
-      PROTOCOLLO DI ESECUZIONE: ${task.title}
-      OBIETTIVO MISSIONE: ${mission?.objective}
-      IL TUO COMPITO SPECIFICO: ${task.description}
+      # [MISSION OBJECTIVE]
+      ${mission?.objective}
+
+      # [BACKGROUND: MISSION MANIFEST]
+      ${missionManifest}
       
-      ESECUZIONE: 
-      Basandoti sul tuo ruolo (${agent.role}), esegui il compito. 
-      ATTENZIONE: Utilizza i TOOL a tua disposizione (es. Gmail, Calendar) per estrarre DATI REALI. 
-      NON SIMULARE dati se puoi accedere a informazioni vere.
+      # [YOUR SPECIFIC TASK: CURRENT PHASE]
+      TITOLO: ${task.title}
+      COSA DEVI FARE ORA: ${task.description}
       
-      REGOLE DI FORMATTAZIONE FINALE:
-      1. PROTOCOLLO SILENZIO TOOL: Mentre stai usando i tool (Gmail, Calendar, ecc.), NON generare alcun report parziale o introduzione testuale. Rispondi SOLO con la chiamata al tool.
-      2. REPORT UNICO: Aspetta di aver raccolto TUTTI i dati necessari. Solo nell'ultimo turno, quando hai tutte le informazioni, genera un UNICO report finale pulito, coeso e altamente professionale in Markdown.
-      3. PULIZIA: NON includere nel testo finale i log tecnici o le stringhe '[CALL: ...]'.
-      4. NESSUNA PIGRIZIA: NON usare 'Vedi sopra'. Scrivi ogni sezione (Email, Calendario, Brief) in modo completo ed elegante.
-      5. PRECISIONE TEMPORALE: Se chiedi il calendario di 'questa settimana', calcola la fine (7 giorni da oggi) e usa 'timeMax'. Non estrarre dati oltre il periodo richiesto.
+      # [STRICT EXECUTION PROTOCOL]
+      1. NO REDUNDANCY: Non ripetere informazioni, titoli o report già presenti nel MANIFEST. Il tuo compito è un passo AVANTI, non una sintesi del passato.
+      2. DATA CONTINUITY: Se il manifest contiene link o dati grezzi, usali per il tuo compito attuale.
+      3. TOOL AUTHORITY: Usa i TOOL (web, gmail, calendar) per estrarre dati reali. Se il manifest ha già i dati che ti servono, non chiamare il tool inutilmente.
+      4. FINAL REPORT: Produci un unico report in Markdown focalizzato esclusivamente sui risultati del TUO task.
     `;
 
     // 5. Chiamata al bridge AI (Agnostico)
@@ -66,7 +83,8 @@ export async function runTaskExecution(taskId: string) {
       messages: [
         { role: 'user', content: executionPrompt }
       ],
-      systemPrompt: agent.system_prompt
+      systemPrompt: agent.system_prompt,
+      missionId: task.mission_id
     });
 
     // 6. Log di completamento nel Neural Stream (Includiamo il contenuto per il "viva" feed)
@@ -86,6 +104,58 @@ export async function runTaskExecution(taskId: string) {
     });
 
     console.log(`[EXECUTOR] Task ${taskId} completed successfully.`);
+
+    // 8. AUTONOMOUS LOOP (Auto-Pilot)
+    // Se la missione è in modalità autonomous, cerchiamo il prossimo task
+    if (mission?.execution_mode === 'autonomous') {
+      const { data: nextTasks, error: nextError } = await (await import('./supabase')).supabase
+        .from('anima_tasks')
+        .select('id, title, requires_approval, order_index')
+        .eq('mission_id', task.mission_id)
+        .eq('status', 'pending')
+        .gt('order_index', task.order_index)
+        .order('order_index', { ascending: true })
+        .limit(1);
+
+      if (nextError) {
+        console.error("[EXECUTOR] Errore recupero prossimo task:", nextError.message);
+      } else if (nextTasks && nextTasks.length > 0) {
+        const nextTask = nextTasks[0];
+        
+        if (nextTask.requires_approval) {
+          // Pausa del loop per approvazione umana (Human-in-the-loop)
+          await createMessage({
+            mission_id: task.mission_id,
+            agent_id: 'system',
+            role: 'system',
+            content: `[NEURAL PAUSE] Il prossimo task ("${nextTask.title}") richiede approvazione manuale. Loop autonomo sospeso.`,
+            metadata: { type: 'approval_required', taskId: nextTask.id }
+          });
+          console.log(`[EXECUTOR] Loop autonomo in pausa per approvazione: ${nextTask.id}`);
+        } else {
+          // Avvio automatico del task successivo (Auto-Pilot)
+          console.log(`[EXECUTOR] Auto-Pilot: Avvio automatico del prossimo task: ${nextTask.id} (${nextTask.title})`);
+          
+          // Usiamo un piccolo delay per dare tempo alla UI di aggiornarsi e per rendere il flusso "vivo"
+          setTimeout(() => {
+            runTaskExecution(nextTask.id).catch(err => {
+              console.error(`[EXECUTOR] Errore nel loop autonomo per ${nextTask.id}:`, err.message);
+            });
+          }, 1500);
+        }
+      } else {
+        // Nessun altro task pendente: Missione completata!
+        await (await import('./anima')).updateMission(task.mission_id, { status: 'completed' });
+        await createMessage({
+          mission_id: task.mission_id,
+          agent_id: 'system',
+          role: 'system',
+          content: `[MISSION COMPLETE] Tutti i task sono stati eseguiti con successo. Missione terminata autonomamente.`,
+          metadata: { type: 'mission_complete' }
+        });
+      }
+    }
+
     return updated;
 
   } catch (err: any) {

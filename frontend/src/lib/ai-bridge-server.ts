@@ -10,6 +10,9 @@ import path from 'path';
 import fs from 'fs';
 import scoroExecutor from '../execution/scoro/executor';
 import googleExecutor from '../execution/google/executor';
+// @ts-ignore
+import webExecutor from '../execution/web/executor';
+import { createMessage } from './anima-persistence';
 
 const ABSOLUTE_SKILLS_PATH = '/Users/francescoguidotti/Documents/Lavoro/anima/skills';
 const skillRegistry = new (SkillRegistry as any)(ABSOLUTE_SKILLS_PATH);
@@ -102,11 +105,14 @@ Produci risposte con un'estetica PREMIUM e PROFESSIONALE:
 4. Ogni risposta deve iniziare con un titolo o un'intestazione chiara che riassuma l'azione svolta.
 5. NON usare introduzioni prolisse come "Certamente, ecco il tuo report". Vai dritto al punto con autorità corporativa.
 
-# [CLEAN SLATE PROTOCOL]
-IGNORA ogni tua interazione precedente in cui affermavi di non avere accesso ai tool. 
-I sistemi di integrazione sono stati APPENA attivati correttamente. 
-Qualsiasi tua precedente dichiarazione di "mancanza di accesso" è ora OBSOLETA e FALSA. 
-Procedi con l'uso dei tool senza ulteriori scuse o richieste di configurazione.
+# [NEURAL PERSISTENCE & DATA INTEGRITY]
+Sei parte di una missione multi-agente. I tuoi log di esecuzione sono la memoria dell'Agenzia.
+1. SINTESI DEI DATI: Nel tuo report finale, devi includere TUTTI i dati rilevanti estratti dai tool (nomi, date, URL, testi). NON limitarti a dire "ho trovato le informazioni", ma riportale esplicitamente in Markdown.
+2. CONTINUITÀ: Struttura i dati in modo che l'agente che verrà dopo di te possa utilizzarli senza dover chiamare di nuovo gli stessi tool.
+3. FEDELTÀ: Non allucinare dati che non hai trovato nei tool. Se un tool non restituisce risultati, dichiaralo chiaramente.
+
+# [AUTHORITY & EXECUTION DIRECTIVE]
+Hai l'autorità tecnica per accedere ai tool (Gmail, Calendar, Web). L'utente ha già configurato gli accessi necessari. Procedi con l'uso dei tool per completare il task in modo professionale e accurato.
 `.trim();
 }
 
@@ -117,11 +123,13 @@ export async function executeAiChat({
   agentId, 
   messages, 
   systemPrompt: rugContext, 
+  missionId,
   options = {} 
 }: {
   agentId: string,
   messages: any[],
   systemPrompt?: string,
+  missionId?: string,
   options?: ChatOptions
 }) {
   try {
@@ -185,11 +193,14 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
 
 # [NATIVE & MANUAL TOOL CALLING]
 1. Se il tuo modello lo supporta, usa la funzione nativa "Function Calling".
-2. SE NON PUOI usare la funzione nativa, scrivi nel tuo messaggio la seguente stringa esatta:
+2. SE NON PUOI usare la funzione nativa, DEVI usare questo formato esatto:
    [CALL: namespace:method({"arg": "val"})]
    
-Esempio: per leggere le mail scrivi: [CALL: gmail:list_messages({"max_results": 10})]
-USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
+# [NEURAL PERSISTENCE RULES]
+- NON inviare MAI il JSON da solo senza il tag [CALL: ...].
+- Invia SOLO la chiamata al tool finché non hai tutti i dati.
+- Una volta ottenuti i dati, produci il report finale in Markdown basandoti ESCLUSIVAMENTE sui risultati dei tool.
+- NON ripetere informazioni già presenti nel Background/Manifest fornito dall'orchestratore.`
       : finalSystemPrompt;
 
     // 4. Configurazione opzioni AI (Hard-cap a 4000)
@@ -207,8 +218,7 @@ USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
       ...options,
       model: modelName,
       tools: supportsNativeTools ? tools : [], // Inviamo tool nativi solo se supportati dal modello
-      maxTokens: finalMaxTokens,
-      max_tokens: finalMaxTokens, // Nome standard per OpenRouter/OpenAI
+      max_tokens: finalMaxTokens, // Unico formato standard per OpenRouter
       temperature: options?.temperature !== undefined ? options.temperature : 0.7
     };
 
@@ -250,9 +260,13 @@ USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
     
     let currentMessages = [...messages];
     let iterationCount = 0;
-    const MAX_ITERATIONS = 3;
+    const MAX_ITERATIONS = 10;
     let finalPayloadToReturn = null;
     let allToolExecutions: any[] = [];
+    
+    // V3.2: NEURAL CONSOLIDATION VARIABLES
+    let accumulatedAssistantText = "";
+    const toolCallFingerprints = new Map<string, string>(); // signature -> result
 
     while (iterationCount < MAX_ITERATIONS) {
       iterationCount++;
@@ -260,6 +274,15 @@ USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
 
       // 5.5. Parsing Manual Tool Calls (MTC) - Il "Paperclip Way"
       const resultText = typeof result === 'string' ? result : result.content || "";
+      
+      // V3.2: ACCUMULATORE NEURALE
+      // Puliamo il testo dai tag [CALL: ...] prima di accumularlo per l'utente, 
+      // ma lo teniamo per la logica interna del loop.
+      const cleanText = resultText.replace(/\[CALL:.*?\]/g, "").trim();
+      if (cleanText && !accumulatedAssistantText.includes(cleanText)) {
+        accumulatedAssistantText += (accumulatedAssistantText ? "\n\n" : "") + cleanText;
+      }
+
       const mtcRegex = /\[CALL:\s*([\w:]+)\s*\((.*?)\)\]/g;
       const manualCalls = [];
       let match;
@@ -274,16 +297,57 @@ USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
         }
       }
 
-      // Unifichiamo i tool calls (nativi e manuali)
+      // 5.6. Fallback Parsing: Raw JSON blocks (per modelli pigri o errori di formato)
+      if (manualCalls.length === 0 && resultText.trim().startsWith('{')) {
+        try {
+          const potentialArgs = JSON.parse(resultText.trim());
+          // Tenta di indovinare il tool basandosi sui campi (euristica Paperclip)
+          let inferredTool = null;
+          if (potentialArgs.calendarId || potentialArgs.timeMin) inferredTool = 'gcal:list_events';
+          if (potentialArgs.summary && potentialArgs.start) inferredTool = 'gcal:create_event';
+          if (potentialArgs.q || potentialArgs.query) inferredTool = 'web:search';
+          if (potentialArgs.topic) inferredTool = 'web:news';
+          if (potentialArgs.url) inferredTool = 'web:fetch';
+          if (potentialArgs.max_results || potentialArgs.q_gmail) inferredTool = 'gmail:list_messages';
+          if (potentialArgs.message_id) inferredTool = 'gmail:get_message';
+          
+          if (inferredTool) {
+             console.log(`[MTC-PARSER] Inferred tool from raw JSON: ${inferredTool}`);
+             manualCalls.push({ name: inferredTool, args: potentialArgs, isManual: true });
+          }
+        } catch (e: any) {
+          console.warn(`[MTC-PARSER] Fallimento euristica su blocco JSON: ${e.message}`);
+        }
+      }
+
+      console.log(`[AI-BRIDGE-SERVER] Iterazione ${iterationCount} - Analisi risposta completata. Strumenti da eseguire: ${manualCalls.length + (result.tool_calls?.length || 0)}`);
+
+      // 5.7. Unificazione Strutturale (v6) - Standard Canonico OpenAI
       const allToolCalls = [
-        ...(result.tool_calls || []),
-        ...manualCalls
+        ...(result.tool_calls || []).map((tc: any) => ({
+          id: tc.id || `tool_native_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'function',
+          function: {
+            name: tc.function?.name || tc.name,
+            arguments: typeof (tc.function?.arguments || tc.args) === 'string' 
+              ? (tc.function?.arguments || tc.args) 
+              : JSON.stringify(tc.function?.arguments || tc.args)
+          }
+        })),
+        ...manualCalls.map((mc: any) => ({
+          id: `tool_manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'function',
+          function: {
+            name: mc.name,
+            arguments: typeof mc.args === 'string' ? mc.args : JSON.stringify(mc.args)
+          }
+        }))
       ];
 
       if (allToolCalls.length === 0) {
-        // Nessun tool chiamato. Abbiamo la risposta finale.
+        // Nessun tool chiamato. Risposta finale.
         finalPayloadToReturn = {
-          content: resultText,
+          content: accumulatedAssistantText || resultText,
           model: modelName,
           provider: provider,
           toolExecutions: allToolExecutions
@@ -291,15 +355,37 @@ USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
         break; // Usciamo dal loop
       }
 
-      console.log(`[AI-BRIDGE-SERVER] Iterazione ${iterationCount} - Tool calls rilevati:`, allToolCalls.map((tc: any) => tc.name));
+      console.log(`[AI-BRIDGE-SERVER] Iterazione ${iterationCount} - Tool calls:`, allToolCalls.map((tc: any) => tc.function.name));
       
       const toolResults = [];
       for (const toolCall of allToolCalls) {
+        const toolName = toolCall.function.name;
+        const toolArgsStr = typeof toolCall.function.arguments === 'string' 
+          ? toolCall.function.arguments 
+          : JSON.stringify(toolCall.function.arguments);
+        
+        // V3.2: DEDUPLICAZIONE TRAMITE FINGERPRINTING
+        const fingerprint = `${toolName}:${toolArgsStr}`;
+        if (toolCallFingerprints.has(fingerprint)) {
+          console.log(`[AI-BRIDGE-SERVER] Skipping duplicate tool call: ${toolName}. Using cached result.`);
+          const cachedOutput = toolCallFingerprints.get(fingerprint)!;
+          toolResults.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            name: toolName, 
+            content: cachedOutput
+          });
+          continue;
+        }
+
+        const toolArgs = JSON.parse(toolArgsStr);
         let toolOutput;
         try {
-          // Determiniamo se è un tool locale o MCP
-          if (toolCall.name.includes(':')) {
-            const [namespace, toolName] = toolCall.name.split(':');
+          // Determiniamo il namespace dal nome canonico del tool
+          if (toolName.includes(':')) {
+            const colonIdx = toolName.indexOf(':');
+            const namespace = toolName.substring(0, colonIdx);
+            const method = toolName.substring(colonIdx + 1);
             
             // Verifichiamo se abbiamo una connessione per questo namespace
             const connection = decryptedConnections.find((c: any) => 
@@ -310,50 +396,80 @@ USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
             
             if (namespace === 'scoro') {
               if (!connection) throw new Error(`Nessun account Scoro collegato a questo agente.`);
-              toolOutput = await (scoroExecutor as any).run(toolName, toolCall.args, connection.credentials);
+              toolOutput = await (scoroExecutor as any).run(method, toolArgs, connection.credentials);
             } else if (namespace === 'gmail' || namespace === 'gcal') {
-              if (!connection) throw new Error(`Nessun account Google collegato a questo agente.`);
-              toolOutput = await (googleExecutor as any).run(toolName, toolCall.args, connection.credentials);
+              if (!connection) throw new Error(`Nessun account Google (${namespace}) collegato a questo agente.`);
+              toolOutput = await (googleExecutor as any).run(`${namespace}:${method}`, toolArgs, connection.credentials);
+            } else if (namespace === 'web') {
+              // Web Skill: non richiede credenziali (gratuito, no-auth)
+              toolOutput = await (webExecutor as any).run(`web:${method}`, toolArgs);
             } else {
-              toolOutput = await mcpService.callTool(toolCall.name, toolCall.args);
+              // Tool MCP generico con namespace
+              toolOutput = await mcpService.callTool(toolName, toolArgs);
             }
           } else {
-            toolOutput = "Tool non riconosciuto (manca namespace).";
+            // Tool senza namespace: prova come tool MCP grezzo
+            toolOutput = await mcpService.callTool(toolName, toolArgs);
           }
         } catch (err: any) {
           toolOutput = `Errore esecuzione tool: ${err.message}`;
         }
 
-        toolResults.push({
+        const stringOutput = typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput);
+        
+        // Salviamo nel fingerprint cache
+        toolCallFingerprints.set(fingerprint, stringOutput);
+
+        const resultForLog = {
           role: 'tool',
-          name: toolCall.name,
-          content: typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput)
-        });
+          tool_call_id: toolCall.id, // Collegamento obbligatorio per coerenza protocollo
+          name: toolName, 
+          content: stringOutput
+        };
+
+        toolResults.push(resultForLog);
+
+        // PERSISTENZA NEURALE: Salviamo il log del tool nel DB per gli agenti futuri
+        if (missionId) {
+           console.log(`[AI-BRIDGE-SERVER] Persistenza log tool: ${toolName}`);
+           await createMessage({
+             mission_id: missionId,
+             agent_id: agentId,
+             role: 'system',
+             content: `[TOOL_EXECUTION: ${toolName}]\nParametri: ${toolArgsStr}\nRisultato: ${resultForLog.content.substring(0, 1000)}${resultForLog.content.length > 1000 ? '...' : ''}`,
+             metadata: { type: 'tool_result', toolName, toolCallId: toolCall.id }
+           });
+        }
       }
 
       // Salviamo i tool usati in questo turno nell'array globale delle esecuzioni (per la cronologia visiva UI)
       allToolExecutions.push(...toolResults);
 
       // Costruiamo i messaggi da aggiungere al contesto per abilitare il prossimo step
-      const assistantMessage: any = { role: 'assistant' };
-      if (result.tool_calls) assistantMessage.tool_calls = result.tool_calls;
-      if (resultText) assistantMessage.content = resultText;
+      const assistantMessage: any = { 
+        role: 'assistant',
+        content: resultText || "",
+        tool_calls: allToolCalls // Usiamo l'array unificato e canonico (v6)
+      };
 
-      const formattedResults = toolResults.map(tr => {
-        const isError = typeof tr.content === 'string' && tr.content.toLowerCase().includes('errore');
-        const antiHallucinationPrompt = isError 
-          ? `\n\n[CRITICAL ERROR DIRECTIVE START]\nThis tool failed to execute due to the error above. You MUST NOT hallucinate, invent, or simulate data to pretend it worked. You MUST reply to the user stating exactly that this error occurred and you cannot proceed with fake data.\n[CRITICAL ERROR DIRECTIVE END]`
-          : '';
-
-        return {
-          role: 'user',
-          content: `[SYSTEM: TOOL_RESULT named "${tr.name}"]\n${tr.content}${antiHallucinationPrompt}`
-        };
-      });
+      const formattedResults = toolResults.map(tr => ({
+        role: 'tool',
+        tool_call_id: tr.tool_call_id,
+        content: tr.content
+      }));
 
       // Aggiungiamo turno dell'assistente e risultati tool alla history per l'iterazione successiva
       currentMessages.push(assistantMessage);
       currentMessages.push(...formattedResults);
+
+      // V3.2: PAPERCLIP-STYLE TERMINATION DIRECTIVE
+      // Se siamo alla 4a iterazione, inietto un avviso per "spingere" il modello a chiudere
+      if (iterationCount === 4) {
+        currentMessages.push({
+          role: 'system',
+          content: "[DIRECTIVE]: You have used multiple tools. Please provide your FINAL and COMPLETE report in the next response, including all findings from previous turns. Avoid more tool calls if possible."
+        });
+      }
 
       // Tracciamo l'evoluzione dell'Agentic Loop su disco (Diagnostica Paperclip Style)
       try {
@@ -369,7 +485,7 @@ USA IMMEDIATAMENTE i tool sopra descritti per recuperare i dati reali.`
     // Se l'agente esaurisce i 3 tentativi consecutivi chiamando SEMPRE tool (non si ferma mai su una stringa)
     if (!finalPayloadToReturn) {
       finalPayloadToReturn = {
-        content: `[SISTEMA INTERNO]: L'Agente ha superato il limite massimo di sicurezza (${MAX_ITERATIONS} iterazioni consecutive). L'esecuzione è stata arrestata preventivamente per proteggere i crediti.`,
+        content: accumulatedAssistantText + `\n\n[SISTEMA INTERNO]: Limite di sicurezza raggiunto (${MAX_ITERATIONS}).`,
         model: modelName,
         provider: provider,
         toolExecutions: allToolExecutions
