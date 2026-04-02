@@ -11,6 +11,7 @@
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise(resolve => rl.question(q, resolve));
@@ -139,8 +140,8 @@ async function main() {
   fs.rmSync(agentDir, { recursive: true, force: true });
   console.log(`\n  ✅ agents/${slug}/ archiviato in .tmp/archived-agents/${slug}/`);
 
-  // ── Aggiornamento doc/ANIMA.md ────────────────────────────────────────
-  const animaPath    = path.join(__dirname, '..', 'doc', 'ANIMA.md');
+  // ── Aggiornamento docs/ANIMA.md ────────────────────────────────────────
+  const animaPath    = path.join(__dirname, '..', 'docs', 'ANIMA.md');
   if (fs.existsSync(animaPath)) {
     let   animaContent = fs.readFileSync(animaPath, 'utf8');
 
@@ -168,6 +169,14 @@ async function main() {
   console.log(`║  I file sono in: .tmp/archived-agents/${slug}/`);
   console.log('║  Puoi recuperarli copiando la directory in agents/ se necessario.');
   console.log('╚══════════════════════════════════════════════════════════════╝\n');
+
+  // Sincronizzazione automatica con il DB
+  try {
+    console.log('🚀 Rimozione agente da Supabase via sync...');
+    execSync('node orchestration/sync.js', { stdio: 'inherit' });
+  } catch (err) {
+    console.error('⚠️  Errore durante il sync automatico:', err.message);
+  }
 }
 
 main().catch(err => {

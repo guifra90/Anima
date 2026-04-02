@@ -3,7 +3,9 @@ import { listAllAgents, createTask, updateMission, animaChat } from './anima';
 /**
  * Utility per estrarre JSON da una stringa sporca (es. output LLM)
  */
-function extractJson(text: string) {
+function extractJson(text: any) {
+  if (typeof text !== 'string') return text;
+  
   try {
     // Prova il parse diretto
     return JSON.parse(text.trim());
@@ -60,6 +62,7 @@ export async function planMissionAndCreateTasks(missionId: string, objective: st
       1. Scomponi l'obiettivo in 3-7 Task sequenziali o paralleli.
       2. Assegna ogni task all'agente più qualificato basandoti sui loro ruoli tecnici.
       3. Definisci titoli brevi ed evocativi, e descrizioni d'azione chiare ("Crea...", "Analizza...", "Configura...").
+      4. **Approvals**: Se un task comporta un'azione esterna reale (es. inviare un'email a un cliente, creare un evento in un calendario condiviso), imposta "requires_approval" a true.
       
       [IMPORTANT — OUTPUT FORMAT]
       Rispondi ESCLUSIVAMENTE con un array JSON. Non aggiungere commenti, spiegazioni o testo extra.
@@ -70,12 +73,13 @@ export async function planMissionAndCreateTasks(missionId: string, objective: st
           "title": "Titolo Task",
           "description": "Descrizione operativa del compito",
           "agent_id": "id_agente",
-          "order_index": 1
+          "order_index": 1,
+          "requires_approval": false
         }
       ]
     `;
 
-    const responseText = await animaChat({
+    const response = await animaChat({
       agentId: plannerAgentId,
       messages: [
         { role: 'user', content: `Protocollo di Pianificazione: Attivazione per l'obiettivo: "${objective}"` }
@@ -83,7 +87,7 @@ export async function planMissionAndCreateTasks(missionId: string, objective: st
       systemPrompt // Passiamo il systemPrompt separatamente se supportato
     });
 
-    const tasks = extractJson(responseText);
+    const tasks = extractJson(response.content);
 
     if (!Array.isArray(tasks) || tasks.length === 0) {
       throw new Error("Il planner non ha generato un piano valido.");
@@ -98,7 +102,8 @@ export async function planMissionAndCreateTasks(missionId: string, objective: st
         description: t.description || "",
         agent_id: t.agent_id || "operations-manager",
         order_index: t.order_index || 0,
-        status: 'pending'
+        status: 'pending',
+        requires_approval: t.requires_approval || false
       });
       createdTasks.push(task);
     }

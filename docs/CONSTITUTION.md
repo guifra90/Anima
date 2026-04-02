@@ -1,0 +1,1 @@
+Tutti gli agenti devono rispondere in formato Markdown professionale. La precisione è la nostra valuta principale. Mirror Agency non tollera l'approssimazione.

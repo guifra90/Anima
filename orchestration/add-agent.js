@@ -11,6 +11,7 @@
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise(resolve => rl.question(q, resolve));
@@ -189,8 +190,8 @@ validateOutput(mockOutput);
   console.log(`✅ agents/${slug}/prompts/system.md`);
   console.log(`✅ agents/${slug}/tests/${slug}.test.js`);
 
-  // ── Aggiornamento doc/ANIMA.md ────────────────────────────────────────
-  const animaPath  = path.join(__dirname, '..', 'doc', 'ANIMA.md');
+  // ── Aggiornamento docs/ANIMA.md ────────────────────────────────────────
+  const animaPath  = path.join(__dirname, '..', 'docs', 'ANIMA.md');
   if (fs.existsSync(animaPath)) {
     let   animaContent = fs.readFileSync(animaPath, 'utf8');
 

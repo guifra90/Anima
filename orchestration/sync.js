@@ -157,11 +157,6 @@ async function sync() {
                     const updateData = mdToDb(slug, metadata, body);
                     await supabase.from('anima_agents').update(updateData).eq('id', slug);
                 }
-            } else if (dbUpdated > localUpdated || syncOptions.forcePull) {
-                // Questa parte verrà gestita nel prossimo loop dei dbAgents, 
-                // ma segniamo che è un PULL potenziale.
-            } else {
-                // console.log(`✅ [OK] ${slug} è sincronizzato.`);
             }
         }
     }
@@ -169,28 +164,86 @@ async function sync() {
     // ─── PULL: Da DB a Locale ──────────────────────────────────────────────────
     for (const dbAgent of dbAgents) {
         const slug = dbAgent.id;
-        if (!localAgents.includes(slug)) {
-            console.log(`📥 [PULL] Nuovo agente trovato su DB: ${slug}`);
-            if (!syncOptions.dryRun) {
-                const agentDir = path.join(AGENTS_DIR, slug);
-                if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
-                const { metadata, body } = dbToMd(dbAgent);
-                fs.writeFileSync(path.join(agentDir, 'AGENTS.md'), serializeAgentsMd(metadata, body));
-                console.log(`   ✅ Cartella created: agents/${slug}/`);
-            }
-        } else {
-            // Verifica se il DB è più recente dei file locali (già analizzato sopra in parte)
-            const agentPath = path.join(AGENTS_DIR, slug, 'AGENTS.md');
-            const stats = fs.statSync(agentPath);
-            const dbUpdated = new Date(dbAgent.updated_at);
-            const localUpdated = stats.mtime;
+        const agentDir = path.join(AGENTS_DIR, slug);
+        const isNew = !localAgents.includes(slug);
 
-            if (dbUpdated > localUpdated && !syncOptions.forcePush) {
-                console.log(`📥 [PULL] Aggiornamento locale per ${slug} (DB più recente)`);
-                if (!syncOptions.dryRun) {
-                    const { metadata, body } = dbToMd(dbAgent);
-                    fs.writeFileSync(agentPath, serializeAgentsMd(metadata, body));
+        if (isNew) {
+            console.log(`📥 [PULL] Nuovo agente trovato su DB: ${slug}`);
+        }
+
+        if (!syncOptions.dryRun) {
+            if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+            
+            // ─── SCAFFOLDING GARANTITO ──────────────────────────────────────────
+            const promptsDir = path.join(agentDir, 'prompts');
+            const testsDir = path.join(agentDir, 'tests');
+            if (!fs.existsSync(promptsDir)) fs.mkdirSync(promptsDir);
+            if (!fs.existsSync(testsDir)) fs.mkdirSync(testsDir);
+
+            // Sincronizza system.md se non esiste o se forzato
+            const systemPromptPath = path.join(promptsDir, 'system.md');
+            if (!fs.existsSync(systemPromptPath) || syncOptions.forcePull) {
+                const promptBody = dbAgent.system_prompt || 'Scrivi qui le istruzioni di sistema per l\'agente...';
+                fs.writeFileSync(systemPromptPath, `# System Prompt — ${dbAgent.name}\n\n${promptBody}`);
+                console.log(`   ✅ System prompt inizializzato: agents/${slug}/prompts/system.md`);
+            }
+            // ────────────────────────────────────────────────────────────────────
+
+            const { metadata, body } = dbToMd(dbAgent);
+            const agentPath = path.join(agentDir, 'AGENTS.md');
+            
+            // Verifica se dobbiamo aggiornare AGENTS.md
+            let shouldUpdate = isNew;
+            if (!isNew) {
+                const stats = fs.statSync(agentPath);
+                const dbUpdated = new Date(dbAgent.updated_at);
+                const localUpdated = stats.mtime;
+                if (dbUpdated > localUpdated && !syncOptions.forcePush) {
+                    console.log(`📥 [PULL] Aggiornamento locale per ${slug} (DB più recente)`);
+                    shouldUpdate = true;
                 }
+            }
+
+            if (shouldUpdate || syncOptions.forcePull) {
+                fs.writeFileSync(agentPath, serializeAgentsMd(metadata, body));
+                console.log(`   ✅ Identity file sincronizzato: agents/${slug}/AGENTS.md`);
+            }
+        }
+    }
+
+    // ─── ARCHIVE: Gestione cartelle orfane (Su FS ma non su DB) ──────────────────
+    const ARCHIVE_DIR = path.join(AGENTS_DIR, '.archive');
+    if (!fs.existsSync(ARCHIVE_DIR)) fs.mkdirSync(ARCHIVE_DIR);
+
+    for (const slug of localAgents) {
+        if (slug.startsWith('.')) continue; // Ignora .archive, .fired, etc.
+        
+        const dbAgent = dbAgents.find(a => a.id === slug);
+        if (!dbAgent) {
+            console.log(`🗑️ [ARCHIVE] Rilevata cartella orfana: agents/${slug}. Spostamento in archivio...`);
+            if (!syncOptions.dryRun) {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const targetPath = path.join(ARCHIVE_DIR, `${slug}_fired_${timestamp}`);
+                fs.renameSync(path.join(AGENTS_DIR, slug), targetPath);
+                console.log(`   ✅ Spostato in: agents/.archive/${slug}_fired_${timestamp}`);
+            }
+        }
+    }
+
+    // ─── GOVERNANCE: Sincronizzazione Costituzione (anima_config) ──────────────
+    const { data: configData } = await supabase.from('anima_config').select('*').eq('key', 'agency_constitution').maybeSingle();
+    if (configData) {
+        const DOCS_DIR = path.join(__dirname, '..', 'docs');
+        if (!fs.existsSync(DOCS_DIR)) fs.mkdirSync(DOCS_DIR);
+        const constPath = path.join(DOCS_DIR, 'CONSTITUTION.md');
+        const constitutionValue = typeof configData.value === 'string' ? configData.value : JSON.stringify(configData.value, null, 2);
+        
+        const localContent = fs.existsSync(constPath) ? fs.readFileSync(constPath, 'utf8') : '';
+        
+        if (constitutionValue !== localContent || syncOptions.forcePull) {
+            console.log(`📜 [GOVERNANCE] Aggiornamento Costituzione locale in docs/CONSTITUTION.md...`);
+            if (!syncOptions.dryRun) {
+                fs.writeFileSync(constPath, constitutionValue);
             }
         }
     }

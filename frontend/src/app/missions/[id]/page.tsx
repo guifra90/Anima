@@ -5,7 +5,7 @@ import {
   Plus, Target, Clock, CheckCircle2, AlertCircle, ChevronLeft, 
   LayoutDashboard, Search, Filter, MoreVertical, Loader2, Bot, Sparkles, Send,
   Cpu, User, Calendar, Play, Pause, Square, ExternalLink, Activity, Zap,
-  RotateCcw, XCircle
+  RotateCcw, XCircle, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { listMessagesByMission } from '@/lib/anima';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface Mission {
   id: string;
@@ -30,7 +31,8 @@ interface Task {
   agent_id: string;
   title: string;
   description: string;
-  status: 'pending' | 'running' | 'completed' | 'error' | 'blocked';
+  status: 'pending' | 'running' | 'completed' | 'error' | 'blocked' | 'waiting';
+  requires_approval?: boolean;
   result?: string;
   order_index: number;
 }
@@ -97,6 +99,12 @@ export default function MissionDetailPage() {
           filter: `mission_id=eq.${id}` 
       }, (payload) => {
           setMessages(prev => [...prev, payload.new as Message]);
+          
+          // Paperclip Style: Notifica e Beep se richiesto intervento umano
+          if (payload.new.metadata?.type === 'approval_required') {
+            playPaperclipBeep();
+            showNotification("Intervento Richiesto", `L'agente ${payload.new.agent_id} attende approvazione per: ${payload.new.metadata.tool}`);
+          }
       })
       .subscribe();
 
@@ -127,13 +135,13 @@ export default function MissionDetailPage() {
     }
   }, [messages]);
 
-  const runTask = useCallback(async (taskId: string) => {
+  const runTask = useCallback(async (taskId: string, bypassSafety: boolean = false) => {
     setExecutingTaskId(taskId);
     try {
       const res = await fetch('/api/tasks/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId })
+        body: JSON.stringify({ taskId, bypassSafety })
       });
       
       const data = await res.json();
@@ -147,22 +155,59 @@ export default function MissionDetailPage() {
     }
   }, []);
 
-  // --- AUTO-PILOT IGNITION SYSTEM ---
-  // If autonomous and no task is running, start the first pending task
+  // --- PAPERCLIP NOTIFICATION SYSTEM ---
+  const playPaperclipBeep = useCallback(() => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 (Alto)
+      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1); // Slide down
+      
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.15);
+    } catch (e) {
+      console.warn("Audio Context failed", e);
+    }
+  }, []);
+
+  const showNotification = useCallback((title: string, body: string) => {
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/favicon.ico' });
+    }
+    toast.info(title, { description: body });
+  }, []);
+
   useEffect(() => {
-    if (!mission || mission.execution_mode !== 'autonomous' || tasks.length === 0 || loading || executingTaskId) return;
+    if (typeof window !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
-    const isAnyRunning = tasks.some(t => t.status === 'running');
-    if (isAnyRunning) return;
+  // --- AUTO-PILOT IGNITION SYSTEM ---
+  // In v2, il loop è gestito dal backend (executor.ts).
+  // Questo effect serve solo come "Innesco Iniziale" se la missione è attiva ma nessun task è partito.
+  useEffect(() => {
+    if (!mission || mission.status !== 'active' || mission.execution_mode !== 'autonomous' || tasks.length === 0 || loading || executingTaskId) return;
 
-    // Find the first task that is pending (sequential order)
-    const nextTask = [...tasks]
+    const isAnyStarted = tasks.some(t => t.status === 'running' || t.status === 'completed');
+    if (isAnyStarted) return;
+
+    const firstTask = [...tasks]
       .sort((a, b) => a.order_index - b.order_index)
       .find(t => t.status === 'pending');
 
-    if (nextTask) {
-      console.log("[Auto-Pilot] Autonomous Ignition: Starting task", nextTask.id);
-      runTask(nextTask.id);
+    if (firstTask && !firstTask.requires_approval) {
+      console.log("[Auto-Pilot] Initial Ignition: Starting first task", firstTask.id);
+      runTask(firstTask.id);
     }
   }, [mission, tasks, loading, executingTaskId, runTask]);
 
@@ -274,85 +319,86 @@ export default function MissionDetailPage() {
   return (
     <div className="flex flex-col h-full font-sans">
       
-      {/* --- TOP BAR / BREADCRUMBS --- */}
-      <header className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-black/40 backdrop-blur-3xl sticky top-0 z-30 shadow-2xl">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="p-3 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-white/10 group">
-            <ChevronLeft size={20} className="text-zinc-500 group-hover:text-cyan-400 transition-colors" />
+      {/* --- TOP BAR / MISSION COMMAND --- */}
+      <header className="px-6 py-4 border-b border-white/[0.03] flex items-center justify-between bg-black/60 backdrop-blur-3xl sticky top-0 z-30 shadow-2xl">
+        <div className="flex items-center gap-5">
+          <Link href="/missions" className="p-2.5 hover:bg-white/[0.02] rounded-xl transition-all border border-transparent hover:border-white/5 group interactive">
+            <ChevronLeft size={18} className="text-zinc-600 group-hover:text-cyan-400 transition-colors" />
           </Link>
-          <div className="h-8 w-px bg-white/10" />
+          <div className="h-6 w-px bg-white/5" />
           <div className="flex flex-col">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-black tracking-tight text-white italic uppercase">{mission.title}</h1>
+              <h1 className="text-xl font-black tracking-tight text-white italic uppercase leading-none">{mission.title}</h1>
               <span className={cn(
-                "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] border shadow-lg",
-                mission.status === 'active' ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-[0.2em] border shadow-lg",
+                mission.status === 'active' ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 animate-pulse' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
               )}>
                   {mission.status}
               </span>
             </div>
-            <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.3em] mt-1">
-              ORCHESTRATION_ID: <span className="text-zinc-400 italic">#{id?.slice(0, 12)}</span>
+            <p className="text-[8px] text-zinc-700 font-mono font-black italic uppercase tracking-[0.3em] mt-1.5 opacity-60">
+              UPLINK_STABLE_ID://<span className="text-zinc-400">{id?.slice(0, 15)}</span>
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={toggleExecutionMode}
             disabled={isUpdating}
             className={cn(
-              "flex items-center gap-2 px-4 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-wider",
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[9px] font-black uppercase tracking-wider interactive",
               mission.execution_mode === 'autonomous' 
-                ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]" 
-                : "bg-white/5 border-white/10 text-zinc-500 hover:border-white/20"
+                ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-500 shadow-[0_0_10px_rgba(34,211,238,0.1)]" 
+                : "bg-white/[0.01] border-white/5 text-zinc-600 hover:border-white/10"
             )}
           >
             {mission.execution_mode === 'autonomous' ? (
-              <Zap size={12} className="fill-current animate-pulse" />
+              <Zap size={11} className="fill-current animate-neural-pulse" />
             ) : (
-              <User size={12} />
+              <User size={11} />
             )}
-            {mission.execution_mode === 'autonomous' ? 'Auto-Pilot On' : 'Manual Mode'}
+            {mission.execution_mode === 'autonomous' ? 'AUTO_PILOT_ON' : 'MANUAL_MODE'}
           </button>
 
-          <div className="h-4 w-px bg-white/10 mx-1" />
+          <div className="h-4 w-px bg-white/5 mx-1" />
 
-          <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400">
-            <CheckCircle2 size={12} className="text-emerald-500" />
-            <span className="text-zinc-200">{tasks.filter(t => t.status === 'completed').length}</span>
-            <span className="text-zinc-600">/</span>
+          <div className="flex items-center gap-1.5 bg-white/[0.01] px-2.5 py-1.5 rounded-lg border border-white/5 text-[9px] font-black text-zinc-700 italic">
+            <CheckCircle2 size={11} className="text-emerald-500" />
+            <span className="text-zinc-300">{tasks.filter(t => t.status === 'completed').length}</span>
+            <span className="text-zinc-800">/</span>
             <span>{tasks.length}</span>
           </div>
+          
           <button 
             onClick={() => setIsStreamOpen(!isStreamOpen)}
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-wider",
-              isStreamOpen ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" : "bg-white/5 border-white/10 text-zinc-500"
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[9px] font-black uppercase tracking-wider interactive",
+              isStreamOpen ? "bg-cyan-500/5 border-cyan-500/10 text-cyan-600" : "bg-white/[0.01] border-white/5 text-zinc-700"
             )}
           >
-            <Activity size={12} className={isStreamOpen ? 'animate-pulse' : ''} />
-            Stream
+            <Activity size={11} className={isStreamOpen ? 'animate-neural-pulse' : ''} />
+            LIVE_FEED
           </button>
 
           <div className="h-4 w-px bg-white/10 mx-1" />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={restartMission}
               disabled={isUpdating}
-              className="p-2 bg-white/5 border border-white/10 rounded-lg text-emerald-500/60 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+              className="p-1.5 hover:text-emerald-400 transition-all interactive"
               title="Restart Mission"
             >
-              <RotateCcw size={14} />
+              <RotateCcw size={14} className="opacity-40 hover:opacity-100" />
             </button>
             <button
               onClick={cancelMission}
               disabled={isUpdating}
-              className="p-2 bg-white/5 border border-white/10 rounded-lg text-red-500/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              className="p-1.5 hover:text-rose-500 transition-all interactive"
               title="Cancel Mission"
             >
-              <XCircle size={14} />
+              <XCircle size={14} className="opacity-40 hover:opacity-100" />
             </button>
           </div>
         </div>
@@ -365,24 +411,24 @@ export default function MissionDetailPage() {
           <div className="max-w-4xl mx-auto space-y-8">
             
             {/* Objective Summary */}
-            <section className="bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-10 relative overflow-hidden backdrop-blur-3xl shadow-2xl group">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-cyan-500/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-                  <Sparkles size={80} />
+            <section className="control-card rounded-[2.5rem] p-8 relative overflow-hidden backdrop-blur-3xl shadow-2xl group interactive">
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Sparkles size={60} />
                 </div>
-                <h3 className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_cyan]" /> Mission Objective
+                <h3 className="text-[9px] font-black text-cyan-600 uppercase tracking-[0.3em] mb-5 flex items-center gap-2 italic">
+                    <div className="w-1 h-1 rounded-full bg-cyan-500 animate-neural-pulse" /> TARGET_MISSION_PROFILE
                 </h3>
-                <p className="text-xl text-zinc-400 leading-relaxed italic font-black uppercase tracking-tight">
+                <p className="text-lg text-zinc-300 leading-relaxed italic font-black uppercase tracking-tight">
                   "{mission.objective}"
                 </p>
             </section>
 
             {/* Task Timeline */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <LayoutDashboard size={10} /> Task Execution Plan
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.3em] flex items-center gap-2 italic">
+                    <LayoutDashboard size={10} className="text-cyan-600" /> STRATEGIC_EXECUTION_SEQUENCE
+                    <div className="flex-1 h-px bg-white/[0.03] ml-2" />
                 </h3>
               </div>
 
@@ -400,24 +446,33 @@ export default function MissionDetailPage() {
                             transition={{ delay: idx * 0.03 }}
                             key={task.id}
                             className={cn(
-                              "group border rounded-[2rem] transition-all duration-300 overflow-hidden shadow-lg",
-                              task.status === 'running' ? "bg-cyan-500/[0.04] border-cyan-500/30 ring-1 ring-cyan-500/20" : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10"
+                              "group border rounded-[2rem] transition-all duration-300 overflow-hidden shadow-lg interactive",
+                              task.status === 'running' ? "bg-cyan-500/[0.02] border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.05)]" : 
+                              task.status === 'waiting' ? "bg-amber-500/[0.01] border-amber-500/10 border-dashed" :
+                              task.requires_approval && task.status === 'pending' ? "bg-amber-500/[0.02] border-amber-500/20" :
+                              "bg-white/[0.01] border-white/5 hover:bg-white/[0.02] hover:border-white/10"
                             )}
                         >
-                            <div className="p-6 flex items-center gap-6">
+                            <div className="p-5 flex items-center gap-5">
                                 {/* Compact Status Node */}
                                 <div className={cn(
-                                  "shrink-0 w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-300",
-                                  task.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/20" : 
-                                  task.status === 'running' ? "bg-cyan-500/20 border-cyan-500/40 animate-pulse" : 
-                                  "bg-white/5 border-white/10"
+                                  "shrink-0 w-10 h-10 rounded-xl border flex items-center justify-center transition-all duration-300",
+                                  task.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : 
+                                  task.status === 'running' ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 animate-pulse" : 
+                                  task.status === 'waiting' ? "bg-amber-500/5 border-amber-500/10 text-amber-500/50" :
+                                  task.requires_approval && task.status === 'pending' ? "bg-amber-500/10 border-amber-500/30 text-amber-500" :
+                                  "bg-white/[0.02] border-white/5 text-zinc-800"
                                 )}>
                                     {task.status === 'completed' ? (
-                                        <CheckCircle2 size={18} className="text-emerald-500" />
+                                        <CheckCircle2 size={14} strokeWidth={3} />
                                     ) : task.status === 'running' ? (
-                                        <Activity size={18} className="text-cyan-400" />
+                                        <Activity size={14} strokeWidth={3} />
+                                    ) : task.status === 'waiting' ? (
+                                        <Clock size={14} className="animate-neural-pulse" />
+                                    ) : task.requires_approval ? (
+                                        <ShieldCheck size={14} strokeWidth={3} />
                                     ) : (
-                                        <span className="text-xs font-black text-zinc-500 italic">0{idx + 1}</span>
+                                        <span className="text-[10px] font-black text-zinc-900 italic font-mono">0{idx + 1}</span>
                                     )}
                                 </div>
 
@@ -425,26 +480,29 @@ export default function MissionDetailPage() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     <h4 className={cn(
-                                      "text-sm font-bold tracking-tight italic",
-                                      task.status === 'completed' ? "text-zinc-500 line-through" : "text-white"
+                                      "text-[12px] font-black italic tracking-wide uppercase",
+                                      task.status === 'completed' ? "text-zinc-800" : "text-zinc-100 group-hover:text-cyan-500 transition-colors"
                                     )}>
                                       {task.title}
                                     </h4>
                                     <div className={cn(
-                                      "px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border",
-                                      task.status === 'completed' ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-500/60" :
-                                      task.status === 'running' ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" :
-                                      "bg-zinc-800 border-white/5 text-zinc-500"
+                                      "px-1.5 py-0.5 rounded text-[6px] font-black uppercase tracking-[0.2em] border shadow-sm",
+                                      task.status === 'completed' ? "bg-zinc-900 border-zinc-800 text-zinc-800" :
+                                      task.status === 'running' ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-500 animate-pulse" :
+                                      task.status === 'waiting' ? "bg-amber-500/5 border-amber-500/10 text-amber-500/60" :
+                                      task.requires_approval && task.status === 'pending' ? "bg-amber-500/10 border-amber-500/20 text-amber-500" :
+                                      "bg-zinc-950 border-white/5 text-zinc-800"
                                     )}>
-                                      {task.status}
+                                      {task.status === 'waiting' ? 'BUSY_NODE' : 
+                                       (task.requires_approval && task.status === 'pending' ? 'SAFETY_WAIT' : task.status)}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[9px] font-bold text-cyan-500/50 uppercase tracking-tighter flex items-center gap-1">
-                                      <Bot size={10} /> {task.agent_id}
+                                    <span className="text-[7px] font-mono font-black text-cyan-700 uppercase tracking-tighter flex items-center gap-1 italic opacity-60">
+                                      <Bot size={8} /> AGENT_UID://{task.agent_id.slice(0,8)}
                                     </span>
-                                    <span className="text-zinc-700 text-[9px]">•</span>
-                                    <p className="text-[10px] text-zinc-500 truncate">{task.description}</p>
+                                    <span className="text-zinc-900 text-[9px]">•</span>
+                                    <p className="text-[9px] text-zinc-700 font-bold italic truncate max-w-[300px]">{task.description}</p>
                                   </div>
                                 </div>
 
@@ -456,13 +514,25 @@ export default function MissionDetailPage() {
                                       <span className="text-[8px] font-black text-cyan-400 uppercase tracking-widest">Running</span>
                                     </div>
                                   ) : (
-                                    <button 
-                                      onClick={() => runTask(task.id)}
-                                      className="p-2 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-lg text-zinc-600 transition-all border border-transparent hover:border-cyan-500/20"
-                                      title="Execute Task"
-                                    >
-                                      <Play size={14} fill="currentColor" className="opacity-40" />
-                                    </button>
+                                    <>
+                                      {task.requires_approval && (
+                                        <button
+                                          onClick={() => runTask(task.id, true)}
+                                          className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 hover:bg-amber-500/20 text-[9px] font-black uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(245,158,11,0.1)] hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+                                        >
+                                          <ShieldCheck size={12} strokeWidth={3} /> Approve & Run
+                                        </button>
+                                      )}
+                                      {!task.requires_approval && task.status === 'pending' && (
+                                        <button 
+                                          onClick={() => runTask(task.id)}
+                                          className="p-2 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-lg text-zinc-600 transition-all border border-transparent hover:border-cyan-500/20"
+                                          title="Execute Task"
+                                        >
+                                          <Play size={14} fill="currentColor" className="opacity-40" />
+                                        </button>
+                                      )}
+                                    </>
                                   )}
                                   {task.status === 'running' && (
                                     <button 
@@ -510,21 +580,21 @@ export default function MissionDetailPage() {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="w-80 border-l border-white/5 bg-[#0D0D0D] flex flex-col shadow-2xl relative z-20"
             >
-              <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
-                <h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Activity size={12} className="animate-pulse" /> Activity Feed
+              <div className="p-5 border-b border-white/[0.03] flex items-center justify-between bg-white/[0.01]">
+                <h3 className="text-[9px] font-black text-cyan-600 uppercase tracking-[0.3em] flex items-center gap-2 italic">
+                  <Activity size={10} className="animate-neural-pulse" /> NEURAL_TRAFFIC_LIVE
                 </h3>
-                <div className="flex items-center gap-1">
-                  <div className="w-1 h-1 rounded-full bg-emerald-500" />
-                  <span className="text-[8px] font-bold text-zinc-500 uppercase">Live</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[7px] font-black text-zinc-700 uppercase italic">UPLINK_STABLE</span>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-[9px] scrollbar-hide">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 font-mono text-[9px] scrollbar-hide">
                 {messages.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-800 italic opacity-50 px-8 text-center">
-                    <Cpu size={24} className="mb-2 opacity-10" />
-                    <p className="tracking-tight leading-relaxed">Synchronizing Neural Link...</p>
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-900 italic opacity-30 px-8 text-center uppercase tracking-widest">
+                    <Cpu size={24} className="mb-3 opacity-5" />
+                    <p className="text-[8px] font-black">Syncing_Neural_Cortex...</p>
                   </div>
                 )}
                 {messages.map((msg, i) => (
@@ -533,15 +603,17 @@ export default function MissionDetailPage() {
                     animate={{ opacity: 1, x: 0 }} 
                     key={msg.id} 
                     className={cn(
-                      "p-3 rounded-lg border",
-                      msg.role === 'system' ? 'bg-cyan-500/5 border-cyan-500/10 text-cyan-200/50' : 'bg-white/[0.01] border-white/5 text-zinc-400'
+                      "p-3 rounded-lg border relative overflow-hidden transition-all group",
+                      msg.role === 'system' ? 'bg-cyan-500/[0.02] border-cyan-500/10 text-cyan-600/60' : 'bg-white/[0.01] border-white/5 text-zinc-500 hover:border-white/10'
                     )}
                   >
-                    <div className="flex items-center justify-between mb-1.5 opacity-40">
-                      <span className="font-bold uppercase tracking-tighter text-[8px]">{msg.agent_id}</span>
-                      <span className="text-[7px]">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <div className="flex items-center justify-between mb-2 opacity-50">
+                      <span className="font-black uppercase tracking-tighter text-[7px] italic flex items-center gap-1">
+                         <div className="w-1 h-1 rounded-full bg-zinc-800" /> {msg.agent_id.slice(0,10)}
+                      </span>
+                      <span className="text-[6px] font-black text-zinc-800">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                     </div>
-                    <div className="prose prose-invert prose-xs max-w-none opacity-80 leading-relaxed text-[10px] font-sans">
+                    <div className="prose prose-invert prose-xs max-w-none opacity-80 leading-relaxed text-[10px] font-sans italic font-bold">
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                   </motion.div>

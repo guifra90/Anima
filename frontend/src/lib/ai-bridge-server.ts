@@ -200,7 +200,8 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
 - NON inviare MAI il JSON da solo senza il tag [CALL: ...].
 - Invia SOLO la chiamata al tool finché non hai tutti i dati.
 - Una volta ottenuti i dati, produci il report finale in Markdown basandoti ESCLUSIVAMENTE sui risultati dei tool.
-- NON ripetere informazioni già presenti nel Background/Manifest fornito dall'orchestratore.`
+- NON ripetere informazioni già presenti nel Background/Manifest fornito dall'orchestratore.
+- [DEDUPLICATION]: Se ricevi un [DEDUPLICATION NOTICE] come risultato di un tool, significa che l'azione è già stata compiuta con successo in precedenza. NON tentare di ripeterla. Usa il risultato fornito (CACHED_RESULT) per il tuo report e NOTIFICA esplicitamente all'utente che l'azione era già stata completata.`
       : finalSystemPrompt;
 
     // 4. Configurazione opzioni AI (Hard-cap a 4000)
@@ -267,6 +268,51 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
     // V3.2: NEURAL CONSOLIDATION VARIABLES
     let accumulatedAssistantText = "";
     const toolCallFingerprints = new Map<string, string>(); // signature -> result
+
+    // NEURAL ACCUMULATOR: Caricamento memoria storica della missione (Across-session deduplication)
+    if (missionId) {
+      const { data: historicalTools } = await supabase
+        .from('anima_messages')
+        .select('content, metadata')
+        .eq('mission_id', missionId)
+        .eq('role', 'system')
+        .filter('metadata->type', 'eq', 'tool_result');
+
+      if (historicalTools && historicalTools.length > 0) {
+        console.log(`[AI-BRIDGE-SERVER] Neural Accumulator: Hydrating ${historicalTools.length} tool results from mission history.`);
+        for (const hTool of historicalTools) {
+          const toolName = hTool.metadata?.toolName;
+          const toolArgsRaw = hTool.metadata?.toolArgs; 
+          
+          if (toolName && toolArgsRaw) {
+            // V3.3: Ensure consistent sorting even for historical data
+            const toolArgsObj = typeof toolArgsRaw === 'string' ? JSON.parse(toolArgsRaw) : toolArgsRaw;
+            const normalizedArgs = JSON.stringify(toolArgsObj, Object.keys(toolArgsObj).sort());
+            const sig = `${toolName}:${normalizedArgs}`;
+            
+            // Extract result from content if not in metadata (legacy fix)
+            const contentParts = hTool.content.split('\nRisultato: ');
+            const result = contentParts.length > 1 ? contentParts[1] : hTool.content;
+            toolCallFingerprints.set(sig, result);
+          } else {
+             // Legacy fallback parsing for content-only logs
+             const mtmatch = hTool.content.match(/\[TOOL_EXECUTION: ([\s\S]*?)\]\nParametri: ([\s\S]*?)\nRisultato: ([\s\S]*)/);
+             if (mtmatch) {
+               try {
+                 const toolName = mtmatch[1];
+                 const toolArgsObj = JSON.parse(mtmatch[2]);
+                 const normalizedArgs = JSON.stringify(toolArgsObj, Object.keys(toolArgsObj).sort());
+                 const sig = `${toolName}:${normalizedArgs}`;
+                 toolCallFingerprints.set(sig, mtmatch[3]);
+               } catch(e) {
+                 const sig = `${mtmatch[1]}:${mtmatch[2]}`;
+                 toolCallFingerprints.set(sig, mtmatch[3]);
+               }
+             }
+          }
+        }
+      }
+    }
 
     while (iterationCount < MAX_ITERATIONS) {
       iterationCount++;
@@ -363,22 +409,29 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
         const toolArgsStr = typeof toolCall.function.arguments === 'string' 
           ? toolCall.function.arguments 
           : JSON.stringify(toolCall.function.arguments);
-        
-        // V3.2: DEDUPLICAZIONE TRAMITE FINGERPRINTING
-        const fingerprint = `${toolName}:${toolArgsStr}`;
+
+        // V3.2: DEDUPLICAZIONE TRAMITE FINGERPRINTING (Normalizzazione JSON per stabilità)
+        const toolArgsObj = JSON.parse(toolArgsStr);
+        const normalizedArgs = JSON.stringify(toolArgsObj, Object.keys(toolArgsObj).sort());
+        const fingerprint = `${toolName}:${normalizedArgs}`;
+
         if (toolCallFingerprints.has(fingerprint)) {
           console.log(`[AI-BRIDGE-SERVER] Skipping duplicate tool call: ${toolName}. Using cached result.`);
           const cachedOutput = toolCallFingerprints.get(fingerprint)!;
+          
+          // Notifichiamo all'agente che l'azione è un duplicato affinché possa avvisare l'utente (User Choice)
+          const deduplicationNotice = `[DEDUPLICATION NOTICE] This action was already executed successfully in a previous turn/session. To protect data integrity and credits, it was not repeated. Use the internal cached result below for your report.\n\nCACHED_RESULT: ${cachedOutput}`;
+
           toolResults.push({
             role: 'tool',
             tool_call_id: toolCall.id,
             name: toolName, 
-            content: cachedOutput
+            content: deduplicationNotice
           });
           continue;
         }
 
-        const toolArgs = JSON.parse(toolArgsStr);
+        const toolArgs = toolArgsObj;
         let toolOutput;
         try {
           // Determiniamo il namespace dal nome canonico del tool
@@ -394,6 +447,33 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
               (namespace === 'gmail' && c.type === 'google')
             );
             
+            // V3.3: Safety Block enhanced with immediate return
+            const isMutatingTool = !options?.bypassSafety && (
+              /:(create|update|delete|send|post|patch|put)/i.test(toolName) || 
+              /^(create|update|delete|send|post|patch|put)/i.test(toolName)
+            );
+            
+            if (isMutatingTool) {
+               console.log(`[AI-BRIDGE-SERVER] [CRITICAL] Mutating tool detected: ${toolName}. INITIATING SAFETY BLOCK.`);
+               // Return IMMEDIATELY to halt the loop and pass control back to the human
+               return {
+                 content: (accumulatedAssistantText ? accumulatedAssistantText + "\n\n" : "") + 
+                          `# [SAFETY BLOCK ACTIVATED]\nL'agente ha richiesto l'uso di un tool critico: **${toolName}**.\nRichiesta di approvazione manuale inviata all'operatore.`,
+                 model: modelName,
+                 provider: provider,
+                 toolExecutions: allToolExecutions,
+                 requiresApproval: true,
+                 blockedTool: toolName,
+                 blockedArgs: toolArgs
+               };
+            }
+
+            // Paperclip Monitoring: Update phase to CALLING_TOOL
+            await supabase
+              .from('anima_agents')
+              .update({ current_phase: `CALLING: ${toolName.toUpperCase()}` })
+              .eq('id', agentId);
+
             if (namespace === 'scoro') {
               if (!connection) throw new Error(`Nessun account Scoro collegato a questo agente.`);
               toolOutput = await (scoroExecutor as any).run(method, toolArgs, connection.credentials);
@@ -432,12 +512,20 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
         // PERSISTENZA NEURALE: Salviamo il log del tool nel DB per gli agenti futuri
         if (missionId) {
            console.log(`[AI-BRIDGE-SERVER] Persistenza log tool: ${toolName}`);
+           // Ricalcoliamo il fingerprint normalizzato per il salvataggio
+           const normalizedArgsForSave = JSON.stringify(toolArgs, Object.keys(toolArgs).sort());
+
            await createMessage({
              mission_id: missionId,
              agent_id: agentId,
              role: 'system',
-             content: `[TOOL_EXECUTION: ${toolName}]\nParametri: ${toolArgsStr}\nRisultato: ${resultForLog.content.substring(0, 1000)}${resultForLog.content.length > 1000 ? '...' : ''}`,
-             metadata: { type: 'tool_result', toolName, toolCallId: toolCall.id }
+             content: `[TOOL_EXECUTION: ${toolName}]\nParametri: ${normalizedArgsForSave}\nRisultato: ${resultForLog.content.substring(0, 1000)}${resultForLog.content.length > 1000 ? '...' : ''}`,
+             metadata: { 
+               type: 'tool_result', 
+               toolName, 
+               toolArgs: normalizedArgsForSave, // Salviamo gli argomenti normalizzati per la deduplicazione rapida
+               toolCallId: toolCall.id 
+             }
            });
         }
       }

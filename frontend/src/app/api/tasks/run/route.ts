@@ -3,15 +3,15 @@ import { runTaskExecution } from '@/lib/executor';
 
 export async function POST(req: NextRequest) {
   try {
-    const { taskId } = await req.json();
+    const { taskId, bypassSafety } = await req.json();
     if (!taskId) return NextResponse.json({ error: "Missing taskId" }, { status: 400 });
 
-    console.log(`[API] Triggering Execution for Task: ${taskId}`);
+    console.log(`[API] Triggering Execution for Task: ${taskId} (Bypass Safety: ${!!bypassSafety})`);
     
     // Eseguiamo in modo asincrono se vogliamo (ma per ora aspettiamo per feedback UI)
     // Se la chat è lunga, Next.js potrebbe andare in timeout (10s su Vercel gratis, 30s locale).
     // Per ora aspettiamo il risultato.
-    const result = await runTaskExecution(taskId);
+    const result = await runTaskExecution(taskId, { bypassSafety: !!bypassSafety });
 
     return NextResponse.json({ success: true, task: result });
   } catch (err: any) {

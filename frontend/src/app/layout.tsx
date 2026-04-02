@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 import { Sidebar } from "@/components/Sidebar";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,
@@ -34,6 +35,7 @@ export default function RootLayout({
         <Sidebar />
         <main className="flex-1 h-full overflow-y-auto bg-background/50 relative scrollbar-hide">
           {children}
+          <Toaster position="bottom-right" theme="dark" richColors />
         </main>
       </body>
     </html>

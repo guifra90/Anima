@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, UserPlus, Search, Shield, Zap, ChevronRight, Bot, Cpu, GitBranch, 
   MoreVertical, X, CheckCircle2, AlertCircle, Loader2, Settings, Mail, Briefcase,
-  Plus, Trash2, Key, Globe, RefreshCw, ChevronDown, ChevronUp, Edit3
+  Plus, Trash2, Key, Globe, RefreshCw, ChevronDown, ChevronUp, Edit3, Power
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 interface Agent {
   id: string;
@@ -22,6 +23,12 @@ interface Agent {
   directives?: string;
   skills?: string[];
   active_connections?: string[];
+  current_mission_id?: string;
+  current_task_id?: string;
+  current_phase?: string;
+  anima_missions?: { title: string };
+  anima_tasks?: { title: string };
+  last_activity_at?: string;
 }
 
 interface Department {
@@ -64,7 +71,7 @@ export default function HiringHall() {
     directives: '',
     skills: [],
     active_connections: [],
-    status: 'offline'
+    status: 'online'
   });
   
   const [isEditMode, setIsEditMode] = useState(false);
@@ -84,6 +91,10 @@ export default function HiringHall() {
   useEffect(() => {
     fetchInitialData();
     fetchSystemHealth();
+
+    // LIVE LABELING: Polling per lo stato in tempo reale degli agenti (silenzioso)
+    const interval = setInterval(() => fetchInitialData(true), 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchSystemHealth = async () => {
@@ -95,8 +106,8 @@ export default function HiringHall() {
     }
   };
 
-  const fetchInitialData = async () => {
-    setIsLoading(true);
+  const fetchInitialData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [agRes, depRes, modRes] = await Promise.all([
         fetch('/api/agents'),
@@ -142,6 +153,96 @@ export default function HiringHall() {
     }
   };
 
+  const handleToggleStatus = async (e: React.MouseEvent, agent: Agent) => {
+    e.stopPropagation();
+    const newStatus = agent.status === 'online' ? 'offline' : 'online';
+    setUpdatingAgentId(agent.id);
+    try {
+      const res = await fetch('/api/agents', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: agent.id, status: newStatus }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        toast.success(`Stato agente ${agent.name} aggiornato: ${newStatus}`);
+        fetchInitialData(true);
+      } else {
+        toast.error("Errore aggiornamento stato");
+      }
+    } catch (err) {
+      console.error("Failed to toggle status", err);
+      toast.error("Errore di rete");
+    } finally {
+      setUpdatingAgentId(null);
+    }
+  };
+
+  const handleDeleteAgent = async (e: React.MouseEvent, agent: Agent) => {
+    e.stopPropagation();
+    if (!confirm(`Sei sicuro di voler eliminare definitivamente l'agente ${agent.name}?`)) return;
+    
+    setUpdatingAgentId(agent.id);
+    try {
+      const res = await fetch(`/api/agents?id=${agent.id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        toast.success(`Agente ${agent.name} eliminato`);
+        setAgents(prev => prev.filter(a => a.id !== agent.id));
+      } else {
+        toast.error("Errore durante l'eliminazione");
+      }
+    } catch (err) {
+      console.error("Delete error", err);
+      toast.error("Errore di rete durante l'eliminazione");
+    } finally {
+      setUpdatingAgentId(null);
+    }
+  };
+
+  /**
+   * Paperclip Lifecycle Helper: Calcola lo stato visuale dell'agente
+   */
+  const getAgentLifecycle = (agent: Agent) => {
+    // 1. ACTIVE: L'agente sta lavorando ad un task
+    if (agent.current_task_id) return { 
+      label: agent.current_phase || 'PROCESSING', 
+      color: 'cyan', 
+      icon: <Loader2 size={10} className="animate-spin" />, 
+      isPulse: true 
+    };
+    
+    // 2. OFFLINE: L'agente è stato spento manualmente
+    if (agent.status === 'offline') return { 
+      label: 'OFFLINE', 
+      color: 'rose', 
+      icon: <Power size={8} />, 
+      isPulse: false 
+    };
+    
+    // 3. DORMANT: Online ma inattivo da > 60 minuti
+    if (agent.last_activity_at) {
+      const lastActive = new Date(agent.last_activity_at).getTime();
+      const now = new Date().getTime();
+      if (now - lastActive > 60 * 60 * 1000) {
+        return { 
+          label: 'DORMANT', 
+          color: 'zinc', 
+          icon: <Zap size={8} className="opacity-50" />, 
+          isPulse: false 
+        };
+      }
+    }
+    
+    // 4. READY: Online e pronto (default)
+    return { 
+      label: 'READY', 
+      color: 'emerald', 
+      icon: <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]" />, 
+      isPulse: false 
+    };
+  };
+
   const openHireModal = () => {
     setIsEditMode(false);
     setIsIdManual(false);
@@ -158,13 +259,14 @@ export default function HiringHall() {
       directives: '',
       skills: [],
       active_connections: [],
-      status: 'offline'
+      status: 'online'
     });
     setActiveModalTab('identity');
     setIsHiringModalOpen(true);
   };
 
-  const openEditModal = (agent: Agent) => {
+  const openEditModal = (e: React.MouseEvent, agent: Agent) => {
+    e.stopPropagation();
     setIsEditMode(true);
     setIsIdManual(true);
     setIsAdvancedOpen(false);
@@ -233,6 +335,7 @@ export default function HiringHall() {
       });
       
       if (res.ok) {
+        toast.success(isEditMode ? `Agente ${newAgent.name} aggiornato` : `Nuovo agente ${newAgent.name} assunto!`);
         setIsHiringModalOpen(false);
         fetchInitialData();
       } else {
@@ -256,11 +359,12 @@ export default function HiringHall() {
       });
       
       if (res.ok) {
+        toast.success("Motore AI aggiornato per l'unità");
         // Update local state without full reload for instant feedback
         setAgents(prev => prev.map(a => a.id === agentId ? { ...a, model_id: modelId } : a));
       } else {
         const error = await res.json();
-        alert(`Errore aggiornamento rapido: ${error.error}`);
+        toast.error(`Errore: ${error.error}`);
       }
     } catch (err) {
       console.error("Error quick updating model", err);
@@ -315,58 +419,59 @@ export default function HiringHall() {
   return (
     <div className="min-h-screen bg-[#050505] text-white p-10 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
       
-      {/* --- HEADER --- */}
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-10 mb-16 border-b border-white/[0.03] pb-10">
-        <div>
-          <div className="flex items-center gap-2.5 text-cyan-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">
-            <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
-            Workforce Status: <span className="text-white">Optimized</span>
+      {/* --- HEADER MISSION CONTROL STYLE --- */}
+      <header className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12 border-b border-white/[0.03] pb-8">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2.5 text-cyan-500 font-mono text-[9px] font-black uppercase tracking-[0.4em] mb-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-neural-pulse" />
+            Unit_Registry: <span className="text-white">Active_Sync</span>
           </div>
-          <h1 className="text-6xl font-black tracking-[-0.05em] italic bg-gradient-to-b from-white via-white to-white/20 bg-clip-text text-transparent uppercase">
-            Hiring Hall
+          <h1 className="text-5xl font-black tracking-[-0.05em] italic bg-gradient-to-r from-white via-white to-white/30 bg-clip-text text-transparent uppercase">
+            Hiring_Hall
           </h1>
-          <p className="text-zinc-500 max-w-xl text-xs font-bold italic leading-relaxed mt-4">
-            Gestisci la tua rete di agenti autonomi. Definisci gerarchie, assegna modelli LLM specializzati e scala la tua operatività Mirror con precisione millimetrica.
+          <p className="text-zinc-600 max-w-lg text-[11px] font-bold italic leading-relaxed mt-2 uppercase tracking-tight">
+            Gestione centralizzata della forza lavoro autonoma. Configurazione nuclei operativi e gerarchie neurali.
           </p>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-3xl">
-            <button onClick={() => setActiveSettingsTab('team')} className={`px-6 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase ${activeSettingsTab === 'team' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:text-white'}`}>ROSTER</button>
-            <button onClick={() => setActiveSettingsTab('agency')} className={`px-6 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase ${activeSettingsTab === 'agency' ? 'bg-cyan-500 text-black shadow-xl' : 'text-zinc-500 hover:text-white'}`}>GOVERNANCE</button>
+        <div className="flex items-center gap-4">
+          <div className="flex bg-white/[0.01] p-1 rounded-xl border border-white/5 backdrop-blur-md">
+            <button onClick={() => setActiveSettingsTab('team')} className={`px-5 py-2.5 rounded-lg text-[9px] font-black tracking-widest transition-all uppercase italic ${activeSettingsTab === 'team' ? 'bg-white text-black shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>ROSTER</button>
+            <button onClick={() => setActiveSettingsTab('agency')} className={`px-5 py-2.5 rounded-lg text-[9px] font-black tracking-widest transition-all uppercase italic ${activeSettingsTab === 'agency' ? 'bg-cyan-500 text-black shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>GOVERNANCE</button>
           </div>
           
-          <div className="w-px h-8 bg-white/10 mx-2" />
+          <div className="w-px h-6 bg-white/10 mx-1" />
 
-          <button onClick={openHireModal} className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-2xl font-black text-[12px] uppercase tracking-[0.25em] hover:bg-cyan-500 hover:text-white transition-all shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
-            <UserPlus size={20} strokeWidth={3} />
-            HIRE_AGENT
+          <button onClick={openHireModal} className="flex items-center gap-3 bg-white text-black px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-xl italic">
+            <UserPlus size={16} strokeWidth={3} />
+            ADD_AGENT_CORE
           </button>
         </div>
       </header>
 
       {/* --- SEARCH & FILTERS --- */}
-      <div className="max-w-7xl mx-auto mb-8 flex items-center gap-4">
+      <div className="max-w-7xl mx-auto mb-10 flex items-center gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-700" size={16} />
           <input 
             type="text" 
             placeholder="Search agents by name, role or unit..."
-            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-6 py-4 text-sm focus:border-cyan-400/50 focus:bg-white/[0.07] outline-none transition-all placeholder:text-zinc-700"
+            className="w-full bg-white/[0.01] border border-white/5 rounded-xl pl-12 pr-6 py-3.5 text-xs font-bold focus:border-cyan-400/30 focus:bg-white/[0.03] outline-none transition-all placeholder:text-zinc-800 italic uppercase tracking-tight"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 ml-4">
-            <button onClick={() => setViewMode('grid')} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-lg ${viewMode === 'grid' ? 'bg-white text-black shadow-lg shadow-black/40' : 'text-zinc-600 hover:text-white'}`}>GRID</button>
-            <button onClick={() => setViewMode('org')} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-lg ${viewMode === 'org' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20' : 'text-zinc-600 hover:text-white'}`}>ORG</button>
+        <div className="flex bg-white/[0.01] p-1 rounded-xl border border-white/5 ml-2">
+            <button onClick={() => setViewMode('grid')} className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg italic ${viewMode === 'grid' ? 'bg-white text-black shadow-md' : 'text-zinc-700 hover:text-zinc-400'}`}>GRID</button>
+            <button onClick={() => setViewMode('org')} className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg italic ${viewMode === 'org' ? 'bg-cyan-500 text-black shadow-md' : 'text-zinc-700 hover:text-zinc-400'}`}>ORG</button>
         </div>
-        <div className="w-px h-8 bg-white/10 mx-2" />
-        <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-            <button onClick={() => setIsDeptModalOpen(true)} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-cyan-400 transition-colors">DEPARTMENTS</button>
-            <button onClick={() => setIsModelModalOpen(true)} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-cyan-400 transition-colors">MODELS</button>
+        <div className="w-px h-6 bg-white/5 mx-2" />
+        <div className="flex bg-white/[0.01] p-1 rounded-xl border border-white/5">
+            <button onClick={() => setIsDeptModalOpen(true)} className="px-4 py-2 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600 hover:text-cyan-400 transition-colors italic">UNITS</button>
+            <button onClick={() => setIsModelModalOpen(true)} className="px-4 py-2 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600 hover:text-cyan-400 transition-colors italic">ENGINES</button>
         </div>
-      </div>      {/* --- AGENT GRID / ORG CHART --- */}
+      </div>
+      {/* --- AGENT GRID / ORG CHART --- */}
       {activeSettingsTab === 'agency' ? (
         /* --- AGENCY CONFIGURATION --- */
         <main className="max-w-4xl mx-auto">
@@ -445,60 +550,99 @@ export default function HiringHall() {
                 animate={{ opacity: 1, y: 0 }} 
                 exit={{ opacity: 0, scale: 0.9 }} 
                 key={agent.id} 
-                className="group relative bg-zinc-950/40 backdrop-blur-3xl border border-white/[0.05] rounded-[3rem] p-10 hover:border-cyan-500/30 transition-all duration-500 overflow-hidden shadow-2xl"
+                className="group relative control-card rounded-[2.5rem] p-7 transition-all duration-500 overflow-hidden shadow-2xl interactive"
               >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-[50px] rounded-full group-hover:bg-cyan-500/10 transition-all" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/[0.03] blur-[50px] rounded-full group-hover:bg-cyan-500/10 transition-all" />
                 
-                <div className="flex justify-between items-start mb-8">
-                  <div className="w-16 h-16 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center group-hover:border-cyan-500/50 transition-colors shadow-inner">
-                    <Bot size={32} className="text-cyan-500" />
+                <div className="flex justify-between items-start mb-6">
+                  <div className="w-12 h-12 bg-white/[0.02] rounded-xl border border-white/5 flex items-center justify-center group-hover:border-cyan-500/30 transition-colors shadow-inner">
+                    <Bot size={24} className="text-zinc-700 group-hover:text-cyan-500 transition-colors" />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => openEditModal(agent)} className="p-2.5 bg-white/5 rounded-xl border border-white/10 text-zinc-600 hover:text-cyan-400 hover:bg-white/10 transition-all">
-                        <Edit3 size={16} />
-                    </button>
-                    <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border flex items-center gap-2 ${agent.status === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'online' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-zinc-800'}`} />
-                        {agent.status}
+
+                  <div className="flex flex-col items-end gap-2.5">
+                    <div className="flex items-center gap-1.5 relative z-10">
+                      <button 
+                        onClick={(e) => handleToggleStatus(e, agent)} 
+                        disabled={updatingAgentId === agent.id}
+                        className={`p-2 rounded-lg border transition-all interactive ${agent.status === 'online' ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10' : 'bg-rose-500/5 border-rose-500/10 text-rose-400/60 hover:text-rose-400 hover:bg-rose-500/10'}`}
+                        title={agent.status === 'online' ? 'Spegni Agente' : 'Accendi Agente'}
+                      >
+                          {updatingAgentId === agent.id ? <Loader2 size={12} className="animate-spin" /> : <Power size={12} />}
+                      </button>
+                      <button 
+                        onClick={(e) => openEditModal(e, agent)} 
+                        className="p-2 bg-white/[0.02] rounded-lg border border-white/5 text-zinc-800 hover:text-cyan-400 hover:bg-white/10 transition-all interactive"
+                        title="Modifica Agente"
+                      >
+                          <Edit3 size={12} />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteAgent(e, agent)} 
+                        disabled={updatingAgentId === agent.id}
+                        className="p-2 bg-white/[0.02] rounded-lg border border-white/5 text-zinc-800 hover:text-rose-500 hover:bg-rose-500/10 transition-all interactive"
+                        title="Elimina Agente"
+                      >
+                          <Trash2 size={12} />
+                      </button>
                     </div>
+
+                    {(() => {
+                      const lifecycle = getAgentLifecycle(agent);
+                      const colorMap: Record<string, string> = {
+                        cyan: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.1)]',
+                        emerald: 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/60',
+                        rose: 'bg-rose-500/5 border-rose-500/10 text-rose-500/60',
+                        zinc: 'bg-zinc-500/5 border-zinc-500/10 text-zinc-700 opacity-60'
+                      };
+
+                      return (
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${colorMap[lifecycle.color]} ${lifecycle.isPulse ? 'animate-pulse' : ''}`}>
+                            <span className={lifecycle.isPulse ? 'animate-neural-pulse' : ''}>{lifecycle.icon}</span>
+                            {lifecycle.label}
+                          </div>
+                          <span className="text-[7px] text-zinc-800 font-mono font-black italic tracking-tighter opacity-50 uppercase tracking-[0.2em]">{agent.id.slice(0,10)}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 <div className="mb-6">
-                  <h3 className="text-2xl font-black italic tracking-tight mb-2 group-hover:text-cyan-400 transition-colors uppercase">{agent.name}</h3>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest italic">{agent.department || 'CORE_UNIT'}</span>
-                    <div className="w-1 h-1 bg-zinc-800 rounded-full" />
-                    <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest italic">{agent.role}</span>
+                  <h3 className="text-xl font-black italic tracking-tight mb-1 group-hover:text-cyan-400 transition-colors uppercase">{agent.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-zinc-700 font-black uppercase tracking-widest italic">{agent.department || 'CORE_UNIT'}</span>
+                    <div className="w-1 h-1 bg-zinc-900 rounded-full" />
+                    <span className="text-[9px] text-cyan-700 font-black uppercase tracking-widest italic">{agent.role}</span>
                   </div>
                 </div>
 
                 {agent.traits && agent.traits.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-8">
+                  <div className="flex flex-wrap gap-1.5 mb-6">
                     {agent.traits.slice(0, 3).map(trait => (
-                      <span key={trait} className="px-3 py-1 bg-white/[0.03] border border-white/5 rounded-lg text-[8px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-zinc-300 transition-all italic">{trait}</span>
+                      <span key={trait} className="px-2.5 py-0.5 bg-white/[0.02] border border-white/5 rounded-md text-[7px] font-black uppercase tracking-widest text-zinc-700 group-hover:text-cyan-700 transition-all italic">{trait}</span>
                     ))}
-                    {agent.traits.length > 3 && <span className="text-[9px] text-zinc-800 font-black italic">+{agent.traits.length - 3}</span>}
+                    {agent.traits.length > 3 && <span className="text-[7px] text-zinc-900 font-black italic">+{agent.traits.length - 3}</span>}
                   </div>
                 )}
                 
-                <p className="text-xs text-zinc-500 line-clamp-2 min-h-[3rem] mb-8 leading-relaxed font-bold italic">{agent.bio || 'Initial_Orchestration_Mandate: Pending Description...'}</p>
+                <p className="text-[11px] text-zinc-600 line-clamp-2 min-h-[2.5rem] mb-6 leading-relaxed font-bold italic">{agent.bio || 'Initial_Orchestration_Mandate: Pending Description...'}</p>
                 
-                <div className="pt-8 border-t border-white/[0.03] flex items-center justify-between">
+                <div className="pt-6 border-t border-white/[0.03] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                      {updatingAgentId === agent.id ? <Loader2 size={16} className="animate-spin text-cyan-400" /> : <Cpu size={18} className="text-zinc-600" />}
+                    <div className="w-8 h-8 rounded-lg bg-white/[0.02] border border-white/5 flex items-center justify-center shrink-0">
+                      {updatingAgentId === agent.id ? <Loader2 size={12} className="animate-spin text-cyan-400" /> : <Cpu size={14} className="text-zinc-800" />}
                     </div>
                     <div className="flex-grow min-w-0">
-                      <p className="text-[8px] text-zinc-700 font-black uppercase tracking-widest leading-none mb-1.5 italic">Engine_Provider</p>
+                      <p className="text-[7px] text-zinc-800 font-black uppercase tracking-[0.2em] leading-none mb-1 italic">Engine_Node</p>
                       <div className="relative">
                         <select 
-                          className="w-full bg-transparent text-[10px] font-black text-cyan-500 italic border-none outline-none appearance-none cursor-pointer hover:text-white transition-all uppercase tracking-widest"
+                          className="w-full bg-transparent text-[9px] font-black text-cyan-600/80 italic border-none outline-none appearance-none cursor-pointer hover:text-cyan-400 transition-all uppercase tracking-widest"
                           value={agent.model_id || ''}
                           onChange={(e) => handleQuickModelUpdate(agent.id, e.target.value)}
                           disabled={updatingAgentId !== null}
                         >
-                          <option value="" disabled>NOT_ALLOCATED</option>
+                          <option value="" disabled>UNALLOCATED</option>
                           {aiModels.map(m => (
                             <option key={m.id} value={m.id} className="bg-[#0E0E0E] text-white py-2">{m.name.toUpperCase()}</option>
                           ))}
@@ -767,8 +911,25 @@ export default function HiringHall() {
                     </AnimatePresence>
                 </div>
 
-                <button type="submit" disabled={isSubmitting} className="w-full bg-cyan-400 text-black py-5 rounded-3xl font-black text-lg tracking-tighter italic hover:shadow-[0_20px_50px_rgba(34,211,238,0.2)] disabled:opacity-50">
-                  {isSubmitting ? <Loader2 className="animate-spin mx-auto" /> : isEditMode ? "UPDATE AGENT" : "AUTHORIZE DEPLOYMENT"}
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting} 
+                  className="group relative w-full bg-white text-black py-5 rounded-3xl font-black text-[12px] uppercase tracking-[0.2em] hover:bg-cyan-400 transition-all shadow-2xl disabled:opacity-30 italic interactive"
+                >
+                  <div className="flex items-center justify-center gap-3">
+                    {isSubmitting ? (
+                        <>
+                            <Loader2 className="animate-spin" size={16} strokeWidth={3} />
+                            SYNTHESIZING_BIOMETRICS...
+                        </>
+                    ) : (
+                        <>
+                            {isEditMode ? <RefreshCw size={14} strokeWidth={3} /> : <Zap size={14} strokeWidth={3} />}
+                            {isEditMode ? "AUTHORIZE_PARAM_UPDATE" : "AUTHORIZE_UNIT_DEPLOYMENT"}
+                            <div className="absolute inset-0 bg-cyan-400 rounded-3xl blur-[20px] opacity-0 group-hover:opacity-30 transition-opacity" />
+                        </>
+                    )}
+                  </div>
                 </button>
               </form>
             </motion.div>
@@ -814,11 +975,21 @@ function OrgNode({ agent, onEdit }: { agent: any, onEdit: (agent: any) => void }
                     </div>
                 </div>
                 <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                    <div className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] border flex items-center gap-2 ${agent.status === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500 font-bold'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'online' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-zinc-800'}`} />
-                        {agent.status}
-                    </div>
-                    <button onClick={() => onEdit(agent)} className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-xl border border-white/10 text-zinc-600 hover:text-cyan-400 hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100">
+                    {agent.current_task_id ? (
+                      <div className="px-3 py-1 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 animate-pulse flex items-center gap-2">
+                        <Loader2 size={8} className="animate-spin" />
+                        THINKING...
+                      </div>
+                    ) : (
+                      <div className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] border flex items-center gap-2 ${agent.status === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500 font-bold'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'online' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-zinc-800'}`} />
+                          {agent.status}
+                      </div>
+                    )}
+                    <button 
+                      onClick={(e) => onEdit(e, agent)} 
+                      className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-xl border border-white/10 text-zinc-600 hover:text-cyan-400 hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100 interactive"
+                    >
                         <Settings size={14} />
                     </button>
                 </div>

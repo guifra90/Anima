@@ -27,6 +27,12 @@ export interface AgentInfo {
   traits?: string[];
   skills?: string[];
   active_connections?: string[];
+  current_mission_id?: string | null; // Paperclip V2 Concurrency
+  current_task_id?: string | null;    // Paperclip V2 Concurrency
+  current_phase?: string | null;      // Paperclip V2 Monitoring
+  anima_missions?: { title: string } | null;
+  anima_tasks?: { title: string } | null;
+  last_activity_at?: string | null;
   created_at?: string;
 }
 
@@ -62,7 +68,7 @@ export interface Task {
   agent_id: string;
   title: string;
   description?: string;
-  status: 'pending' | 'running' | 'completed' | 'error' | 'blocked';
+  status: 'pending' | 'running' | 'completed' | 'error' | 'blocked' | 'waiting';
   requires_approval?: boolean;
   result?: string;
   order_index: number;
@@ -113,7 +119,7 @@ export async function getAgentInfo(agentId: string): Promise<AgentInfo | null> {
 export async function listAllAgents(): Promise<AgentInfo[]> {
   const { data, error } = await supabase
     .from('anima_agents')
-    .select('*')
+    .select('*, anima_missions:current_mission_id(title), anima_tasks:current_task_id(title)')
     .order('name', { ascending: true });
 
   if (error) {
@@ -197,6 +203,23 @@ export async function isSlugUnique(slug: string): Promise<boolean> {
   
   if (error) return false;
   return count === 0;
+}
+
+/**
+ * Elimina un agente dal database
+ */
+export async function deleteAgent(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('anima_agents')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[SDK DELETE AGENT ERROR]', error.message);
+    throw error;
+  }
+
+  return true;
 }
 
 /** --- DEPARTMENTS --- **/
@@ -453,11 +476,12 @@ async function searchKnowledge(query: string) {
  * In v2, non chiama più Gemini direttamente ma usa il bridge API locale (/api/ai/chat).
  * Questo permette di essere totalmente indipendenti dal modello (Ollama, Claude, Gemini, etc).
  */
-export async function animaChat({ agentId, messages, systemPrompt: overrideSystemPrompt, missionId }: { 
+export async function animaChat({ agentId, messages, systemPrompt: overrideSystemPrompt, missionId, options }: { 
   agentId: string, 
   messages: { role: 'user' | 'assistant', content: string }[],
   systemPrompt?: string,
-  missionId?: string
+  missionId?: string,
+  options?: { bypassSafety?: boolean }
 }) {
   try {
     // 1. RAG (eseguito sul frontend se possibile)
@@ -479,9 +503,10 @@ export async function animaChat({ agentId, messages, systemPrompt: overrideSyste
         agentId,
         messages,
         systemPrompt,
-        missionId
+        missionId,
+        options
       });
-      return result.content;
+      return result;
     }
 
     // AMBIENTE CLIENT: Usiamo il bridge API via HTTP
@@ -492,14 +517,15 @@ export async function animaChat({ agentId, messages, systemPrompt: overrideSyste
         agentId,
         messages,
         systemPrompt,
-        missionId
+        missionId,
+        options
       })
     });
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Chat failed");
 
-    return data.content;
+    return data;
   } catch (err: any) {
     console.error("[ANIMA LIB] Chat fallita:", err.message);
     throw err;

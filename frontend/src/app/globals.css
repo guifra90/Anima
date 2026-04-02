@@ -15,22 +15,62 @@
 }
 
 :root {
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.05 0 0); /* Quasi nero assoluto #0D0D0D */
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --border: oklch(0.269 0 0);
-  --radius: 0.5rem;
+  --card: rgba(255, 255, 255, 0.02);
+  --muted: oklch(0.2 0 0);
+  --muted-foreground: oklch(0.6 0 0);
+  --accent: #22d3ee; /* Cyan-400 */
+  --emerald: #34d399; /* Emerald-400 */
+  --border: rgba(255, 255, 255, 0.05);
+  --radius: 1.5rem;
+  --font-mono: "Geist Mono", monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  cursor: default;
+}
+
+/* Interattività Globale */
+button, 
+a, 
+[role="button"],
+.interactive {
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active, 
+a:active {
+  transform: scale(0.98);
+}
+
+/* Control Room Components */
+.control-card {
+  background: rgba(255, 255, 255, 0.015);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.control-card:hover {
+  border-color: rgba(34, 211, 238, 0.2);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Animations */
+.animate-neural-pulse {
+  animation: neural-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes neural-pulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.5)); }
+  50% { opacity: .7; filter: drop-shadow(0 0 15px rgba(34, 211, 238, 0.8)); }
 }
 
 .scrollbar-hide::-webkit-scrollbar {
