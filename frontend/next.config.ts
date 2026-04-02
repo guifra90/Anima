@@ -4,7 +4,7 @@ import path from "path";
 const nextConfig: NextConfig = {
   /* config options here */
   turbopack: {
-    root: path.resolve("."),
+    root: path.resolve(".."),
   },
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.SUPABASE_URL,

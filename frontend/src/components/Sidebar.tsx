@@ -95,13 +95,28 @@ export function Sidebar() {
           </div>
         </section>
 
-        {/* System Section */}
+        {/* Resources Section */}
         <section>
           <div className="px-4 mb-4 flex items-center justify-between">
-            <span className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.2em]">Infrastructure</span>
+            <span className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.2em]">Resources</span>
             <div className="h-px bg-white/5 flex-1 ml-4" />
           </div>
           <div className="space-y-1.5">
+            <Link
+              href="/docs"
+              className={cn(
+                "group flex items-center gap-3.5 px-4 py-2.5 rounded-xl transition-all border border-transparent hover:border-white/5",
+                pathname.startsWith('/docs') ? "bg-white/[0.04] text-white border-white/10" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.02]"
+              )}
+            >
+              <div className={cn(
+                "p-1.5 rounded-lg transition-colors",
+                pathname.startsWith('/docs') ? "bg-cyan-500/10 text-cyan-400" : "text-zinc-600 group-hover:text-zinc-400"
+              )}>
+                <BarChart3 size={16} /> {/* Placeholder for BookOpen or similar if not imported */}
+              </div>
+              <span className="text-[13px] font-semibold tracking-tight">Manual & Docs</span>
+            </Link>
              <Link
               href="/settings"
               className="group flex items-center gap-3.5 px-4 py-2.5 text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.02] rounded-xl transition-all border border-transparent hover:border-white/5"
