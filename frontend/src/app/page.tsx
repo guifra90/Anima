@@ -23,6 +23,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { Search, Filter } from 'lucide-react';
 
 export default function MissionControl() {
@@ -43,7 +44,7 @@ export default function MissionControl() {
     const fetchMissions = async () => {
       const { data } = await supabase
         .from('anima_missions')
-        .select('*')
+        .select('*, tasks:anima_tasks(status)')
         .order('created_at', { ascending: false });
       if (data) setMissions(data);
     };
@@ -213,47 +214,56 @@ export default function MissionControl() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {filteredMissions.length > 0 ? filteredMissions.map(mission => (
-                <Link key={mission.id} href={`/missions/${mission.id}`} className="block group control-card rounded-[2rem] p-6 relative overflow-hidden h-full">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <Workflow size={32} />
-                    </div>
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 rounded-md text-[8px] font-black uppercase tracking-widest leading-none tabular-nums">
-                          {mission.status}
-                        </span>
-                        <div className="w-1 h-1 rounded-full bg-cyan-500 animate-pulse" />
+              {filteredMissions.length > 0 ? filteredMissions.map(mission => {
+                const totalTasks = mission.tasks?.length || 0;
+                const completedTasks = mission.tasks?.filter((t: any) => t.status === 'completed').length || 0;
+                const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+                return (
+                  <Link key={mission.id} href={`/missions/${mission.id}`} className="block group control-card rounded-[2rem] p-6 relative overflow-hidden h-full">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Workflow size={32} />
                       </div>
-                      <div className="flex items-center gap-2 relative z-10">
-                        <button 
-                          onClick={(e) => handleDeleteMission(e, mission.id, mission.title)}
-                          className="p-1.5 bg-white/[0.02] border border-white/5 rounded-lg text-zinc-800 hover:text-rose-500 hover:bg-rose-500/10 transition-all interactive"
-                          title="Elimina Missione"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                        <span className="text-zinc-800 text-[8px] font-mono font-black tracking-tighter leading-none">ID_SYS://{mission.id.slice(0,6)}</span>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "px-2.5 py-0.5 border rounded-md text-[8px] font-black uppercase tracking-widest leading-none tabular-nums",
+                            mission.status === 'active' ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" : "bg-zinc-900 text-zinc-600 border-white/5"
+                          )}>
+                            {mission.status}
+                          </span>
+                          {mission.status === 'active' && <div className="w-1 h-1 rounded-full bg-cyan-500 animate-pulse" />}
+                        </div>
+                        <div className="flex items-center gap-2 relative z-10">
+                          <button 
+                            onClick={(e) => handleDeleteMission(e, mission.id, mission.title)}
+                            className="p-1.5 bg-white/[0.02] border border-white/5 rounded-lg text-zinc-800 hover:text-rose-500 hover:bg-rose-500/10 transition-all interactive"
+                            title="Elimina Missione"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                          <span className="text-zinc-800 text-[8px] font-mono font-black tracking-tighter leading-none">ID_SYS://{mission.id.slice(0,6)}</span>
+                        </div>
                       </div>
-                    </div>
-                    <h3 className="text-xl font-black mb-2 group-hover:text-cyan-400 transition-colors leading-tight italic uppercase tracking-tight">{mission.title}</h3>
-                    <p className="text-zinc-600 text-[11px] font-medium line-clamp-2 mb-6 leading-relaxed italic pr-6 h-8">{mission.description || 'Null_Context_Detected'}</p>
-                    
-                    <div className="space-y-2 mt-auto">
-                      <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-zinc-700 mb-1 italic">
-                        <span>Sync_Level</span>
-                        <span className="text-cyan-600 font-mono">65.0%</span>
+                      <h3 className="text-xl font-black mb-2 group-hover:text-cyan-400 transition-colors leading-tight italic uppercase tracking-tight">{mission.title}</h3>
+                      <p className="text-zinc-600 text-[11px] font-medium line-clamp-2 mb-6 leading-relaxed italic pr-6 h-8">{mission.objective || 'Null_Context_Detected'}</p>
+                      
+                      <div className="space-y-2 mt-auto">
+                        <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-zinc-700 mb-1 italic">
+                          <span>Sync_Level</span>
+                          <span className="text-cyan-600 font-mono">{progress}.0%</span>
+                        </div>
+                        <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden border border-white/5">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${progress}%` }}
+                            className="bg-gradient-to-r from-cyan-600/80 to-blue-700/80 h-full rounded-full shadow-[0_0_8px_rgba(6,182,212,0.3)]" 
+                          />
+                        </div>
                       </div>
-                      <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden border border-white/5">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: '65%' }}
-                          className="bg-gradient-to-r from-cyan-600/80 to-blue-700/80 h-full rounded-full shadow-[0_0_8px_rgba(6,182,212,0.3)]" 
-                        />
-                      </div>
-                    </div>
-                </Link>
-              )) : (
+                  </Link>
+                );
+              }) : (
                 <Link href="/missions/new" className="col-span-2 group">
                   <div className="p-12 border border-dashed border-white/10 rounded-[2.5rem] flex flex-col items-center justify-center text-zinc-800 bg-white/[0.005] hover:bg-cyan-500/[0.015] hover:border-cyan-500/20 transition-all">
                     <PlusCircle size={40} strokeWidth={1} className="mb-4 opacity-10 group-hover:opacity-30 group-hover:text-cyan-400 transition-all" />

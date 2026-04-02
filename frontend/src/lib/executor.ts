@@ -82,8 +82,8 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
         completedTasks.map(ct => `## ARTIFACT: ${ct.title}\n${ct.result}`).join("\n\n---\n\n");
     }
 
-    // 4. Preparazione Prompt Strategico
-    // Uniamo l'obiettivo della missione con la descrizione specifica del task
+    // 4. Preparazione Prompt Strategico — MISSION CONTINUUM v2.1
+    // Uniamo l'obiettivo della missione con la consapevolezza narrativa del progresso
     const executionPrompt = `
       # [MISSION OBJECTIVE]
       ${mission?.objective}
@@ -91,15 +91,18 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
       # [BACKGROUND: MISSION MANIFEST]
       ${missionManifest}
       
+      # [NEURAL TRACE: STRATEGIC INSIGHTS]
+      Prendi atto delle scoperte e delle deduzioni logiche fatte finora. Se i task precedenti hanno incontrato ostacoli o scoperto dati sensibili, usali per ottimizzare la tua esecuzione. Mantieni la coerenza stilistica con il lavoro già svolto.
+
       # [YOUR SPECIFIC TASK: CURRENT PHASE]
       TITOLO: ${task.title}
-      COSA DEVI FARE ORA: ${task.description}
+      DESCRIZIONE: ${task.description}
       
       # [STRICT EXECUTION PROTOCOL]
-      1. NO REDUNDANCY: Non ripetere informazioni, titoli o report già presenti nel MANIFEST. Il tuo compito è un passo AVANTI, non una sintesi del passato.
-      2. DATA CONTINUITY: Se il manifest contiene link o dati grezzi, usali per il tuo compito attuale.
-      3. TOOL AUTHORITY: Usa i TOOL (web, gmail, calendar) per estrarre dati reali. Se il manifest ha già i dati che ti servono, non chiamare il tool inutilmente.
-      4. FINAL REPORT: Produci un unico report in Markdown focalizzato esclusivamente sui risultati del TUO task.
+      1. KNOWLEDGE FIRST: Se il MANIFEST o la KNOWLEDGE BASE contengono già i dati necessari, NON usare 'web:search'. Usa ciò che sai.
+      2. NO REDUNDANCY: Non ripetere informazioni o report già presenti nel MANIFEST. Vai OLTRE.
+      3. DATA CONTINUITY: Usa i dati (link, nomi, file) estratti dai task precedenti nel MANIFEST.
+      4. FINAL REPORT: Produci un report unico focalizzato esclusivamente sull'esito del TUO task.
     `;
 
     // 4.5. Recupero Messaggi Storici della Missione (Neural Memory)
@@ -243,14 +246,51 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
         }
       } else {
         // Nessun altro task pendente: Missione completata!
-        console.log(`[EXECUTOR] Missione ${task.mission_id} completata autonomamente.`);
+        console.log(`[EXECUTOR] Missione ${task.mission_id} completata autonomamente. Inizio consolidamento memoria...`);
+        
+        // 8.5. LONG-TERM MEMORY CONSOLIDATION (RAG Indexing)
+        // Generiamo una memoria semantica per le future missioni
+        try {
+          // Recuperiamo TUTTI i task completati (incluso quello appena finito)
+          const { data: finalTasks } = await (await import('./supabase')).supabase
+            .from('anima_tasks')
+            .select('title, result')
+            .eq('mission_id', task.mission_id)
+            .eq('status', 'completed')
+            .order('order_index', { ascending: true });
+
+          const missionSummary = `MISSIONE: ${mission?.title}\nOBIETTIVO: ${mission?.objective}\nRISULTATI ANALITICI:\n` + 
+            (finalTasks || []).map(ct => `## TASK: ${ct.title}\n${ct.result}`).join("\n\n---\n\n");
+
+          // @ts-ignore
+          const embedding = await (await import('./embedding')).getEmbedding(missionSummary);
+          
+          await (await import('./supabase')).supabase
+            .from('anima_knowledge')
+            .insert([{
+              source_type: 'mission_memory',
+              source_id: task.mission_id,
+              content: missionSummary,
+              embedding: embedding,
+              metadata: { 
+                mission_id: task.mission_id, 
+                title: mission?.title,
+                completed_at: new Date().toISOString()
+              }
+            }]);
+          
+          console.log(`[EXECUTOR] Neural Memory indexed for mission ${task.mission_id}.`);
+        } catch (e: any) {
+          console.error("[EXECUTOR] Fallimento consolidamento memoria semantica:", e.message);
+        }
+
         await (await import('./anima')).updateMission(task.mission_id, { status: 'completed' });
         
         await createMessage({
           mission_id: task.mission_id,
           agent_id: 'system',
           role: 'system',
-          content: `[MISSION COMPLETE] Obiettivo raggiunto con successo. L'agenzia ha completato tutti i task in modalità Auto-Pilot.`,
+          content: `[MISSION COMPLETE] Obiettivo raggiunto con successo. Consolidamento memoria neurale completato.`,
           metadata: { type: 'mission_complete' }
         });
       }

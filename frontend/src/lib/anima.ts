@@ -444,14 +444,14 @@ export async function syncAgentConnections(agentId: string, connectionIds: strin
 /**
  * Cerca conoscenza semantica nelle SOPs (RAG)
  */
-async function searchKnowledge(query: string) {
+export async function searchKnowledge(query: string) {
   try {
     const queryEmbedding = await getEmbedding(query);
 
     const { data: matches, error } = await supabase.rpc('match_knowledge', {
       query_embedding: queryEmbedding,
-      match_threshold: 0.4, 
-      match_count: 3
+      match_threshold: 0.2, 
+      match_count: 5
     });
 
     if (error) {

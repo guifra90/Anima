@@ -35,3 +35,18 @@ export async function createMessage(msg: {
   }
   return data;
 }
+
+export async function updateMessage(id: string, data: any) {
+  const { data: updated, error } = await supabase
+    .from('anima_messages')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error(`[ANIMA PERSISTENCE] Error updating message ${id}:`, error.message);
+    throw error;
+  }
+  return updated;
+}

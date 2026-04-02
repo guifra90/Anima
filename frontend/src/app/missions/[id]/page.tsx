@@ -5,7 +5,7 @@ import {
   Plus, Target, Clock, CheckCircle2, AlertCircle, ChevronLeft, 
   LayoutDashboard, Search, Filter, MoreVertical, Loader2, Bot, Sparkles, Send,
   Cpu, User, Calendar, Play, Pause, Square, ExternalLink, Activity, Zap,
-  RotateCcw, XCircle, ShieldCheck
+  RotateCcw, X, XCircle, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -48,6 +48,7 @@ interface Message {
 
 export default function MissionDetailPage() {
   const { id } = useParams();
+  const idStr = Array.isArray(id) ? id[0] : id as string;
   const [mission, setMission] = useState<Mission | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -89,21 +90,29 @@ export default function MissionDetailPage() {
 
     // --- REALTIME SUBSCRIPTIONS ---
     
-    // 1. Listen for new messages (Neural Stream)
+    // 1. Listen for new or updated messages (Neural Stream 2.0)
     const messageChannel = supabase
       .channel(`mission-messages-${id}`)
       .on('postgres_changes', { 
-          event: 'INSERT', 
+          event: '*', // Listen to INSERT, UPDATE, DELETE
           schema: 'public', 
           table: 'anima_messages',
           filter: `mission_id=eq.${id}` 
       }, (payload) => {
-          setMessages(prev => [...prev, payload.new as Message]);
-          
-          // Paperclip Style: Notifica e Beep se richiesto intervento umano
-          if (payload.new.metadata?.type === 'approval_required') {
-            playPaperclipBeep();
-            showNotification("Intervento Richiesto", `L'agente ${payload.new.agent_id} attende approvazione per: ${payload.new.metadata.tool}`);
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as Message;
+            setMessages(prev => [...prev, newMsg]);
+            
+            // Paperclip Style: Notifica e Beep se richiesto intervento umano
+            if (newMsg.metadata?.type === 'approval_required') {
+              playPaperclipBeep();
+              showNotification("Intervento Richiesto", `L'agente ${newMsg.agent_id} attende approvazione.`);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMsg = payload.new as Message;
+            setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+          } else if (payload.eventType === 'DELETE') {
+            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
           }
       })
       .subscribe();
@@ -192,24 +201,25 @@ export default function MissionDetailPage() {
     }
   }, []);
 
-  // --- AUTO-PILOT IGNITION SYSTEM ---
-  // In v2, il loop è gestito dal backend (executor.ts).
-  // Questo effect serve solo come "Innesco Iniziale" se la missione è attiva ma nessun task è partito.
+  // --- AUTO-PILOT IGNITION SYSTEM (Mission Control 2.0) ---
   useEffect(() => {
     if (!mission || mission.status !== 'active' || mission.execution_mode !== 'autonomous' || tasks.length === 0 || loading || executingTaskId) return;
 
-    const isAnyStarted = tasks.some(t => t.status === 'running' || t.status === 'completed');
-    if (isAnyStarted) return;
-
-    const firstTask = [...tasks]
+    // Troviamo il primo task PENDING che non richiede approvazione (o che aspetta l'esecuzione iniziale)
+    const nextTask = [...tasks]
       .sort((a, b) => a.order_index - b.order_index)
       .find(t => t.status === 'pending');
 
-    if (firstTask && !firstTask.requires_approval) {
-      console.log("[Auto-Pilot] Initial Ignition: Starting first task", firstTask.id);
-      runTask(firstTask.id);
+    // Se esiste un task in esecuzione, non facciamo nulla (il loop è gestito dal backend)
+    const isAnyRunning = tasks.some(t => t.status === 'running');
+    if (isAnyRunning) return;
+
+    if (nextTask && !nextTask.requires_approval) {
+      console.log("[Auto-Pilot] Active Ignition: Starting next task", nextTask.id);
+      playPaperclipBeep();
+      runTask(nextTask.id);
     }
-  }, [mission, tasks, loading, executingTaskId, runTask]);
+  }, [mission?.execution_mode, mission?.status, tasks, loading, executingTaskId, runTask, playPaperclipBeep]);
 
   const updateTaskStatus = async (taskId: string, status: string) => {
     setIsUpdating(true);
@@ -319,86 +329,96 @@ export default function MissionDetailPage() {
   return (
     <div className="flex flex-col h-full font-sans">
       
-      {/* --- TOP BAR / MISSION COMMAND --- */}
-      <header className="px-6 py-4 border-b border-white/[0.03] flex items-center justify-between bg-black/60 backdrop-blur-3xl sticky top-0 z-30 shadow-2xl">
-        <div className="flex items-center gap-5">
-          <Link href="/missions" className="p-2.5 hover:bg-white/[0.02] rounded-xl transition-all border border-transparent hover:border-white/5 group interactive">
-            <ChevronLeft size={18} className="text-zinc-600 group-hover:text-cyan-400 transition-colors" />
+      {/* --- COMMAND CENTER HEADER (Paperclip V2 Style) --- */}
+      <header className="px-6 py-3 border-b border-white/[0.04] flex items-center justify-between bg-black/40 backdrop-blur-3xl sticky top-0 z-30 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+        
+        {/* IDENTITY & MISSION PROFILE ZONE (Left-Aligned) */}
+        <div className="flex items-center gap-6 flex-1 min-w-0 mr-8">
+          <Link href="/missions" className="p-2 hover:bg-white/[0.03] rounded-lg transition-all border border-transparent hover:border-white/5 active:scale-95 group interactive">
+            <ChevronLeft size={16} className="text-zinc-600 group-hover:text-cyan-400 transition-colors" />
           </Link>
-          <div className="h-6 w-px bg-white/5" />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-black tracking-tight text-white italic uppercase leading-none">{mission.title}</h1>
-              <span className={cn(
-                "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-[0.2em] border shadow-lg",
-                mission.status === 'active' ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 animate-pulse' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-              )}>
+          
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            {/* Short ID & Trace */}
+            <div className="flex flex-col shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-black text-white italic tracking-tighter">M-{idStr?.slice(-6).toUpperCase()}</span>
+                <span className={cn(
+                  "px-1.5 py-0.5 rounded-sm text-[7px] font-black uppercase tracking-widest border",
+                  mission.status === 'active' ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 animate-pulse' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                )}>
                   {mission.status}
-              </span>
+                </span>
+              </div>
+              <span className="text-[7px] text-zinc-800 font-mono font-black uppercase tracking-[0.2em] mt-0.5">UPLINK_STABLE</span>
             </div>
-            <p className="text-[8px] text-zinc-700 font-mono font-black italic uppercase tracking-[0.3em] mt-1.5 opacity-60">
-              UPLINK_STABLE_ID://<span className="text-zinc-400">{id?.slice(0, 15)}</span>
-            </p>
+
+            <div className="h-6 w-px bg-white/5 shrink-0" />
+
+            {/* Mission Title */}
+            <h1 className="text-xs font-black tracking-tight text-white italic uppercase leading-tight truncate px-2" title={mission.title}>
+              {mission.title}
+            </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* TELEMETRY & CONTROLS */}
+        <div className="flex items-center gap-3 min-w-[220px] justify-end">
+          
+          {/* Pilot Modality */}
           <button
             onClick={toggleExecutionMode}
             disabled={isUpdating}
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[9px] font-black uppercase tracking-wider interactive",
+              "flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all text-[8px] font-black uppercase tracking-wider interactive",
               mission.execution_mode === 'autonomous' 
-                ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-500 shadow-[0_0_10px_rgba(34,211,238,0.1)]" 
-                : "bg-white/[0.01] border-white/5 text-zinc-600 hover:border-white/10"
+                ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.1)]" 
+                : "bg-white/[0.02] border-white/5 text-zinc-600 hover:border-white/10"
             )}
           >
-            {mission.execution_mode === 'autonomous' ? (
-              <Zap size={11} className="fill-current animate-neural-pulse" />
-            ) : (
-              <User size={11} />
-            )}
-            {mission.execution_mode === 'autonomous' ? 'AUTO_PILOT_ON' : 'MANUAL_MODE'}
+            {mission.execution_mode === 'autonomous' ? <Zap size={10} className="animate-neural-pulse" /> : <User size={10} />}
+            {mission.execution_mode === 'autonomous' ? 'AUTO_PILOT' : 'MANUAL'}
           </button>
 
-          <div className="h-4 w-px bg-white/5 mx-1" />
-
-          <div className="flex items-center gap-1.5 bg-white/[0.01] px-2.5 py-1.5 rounded-lg border border-white/5 text-[9px] font-black text-zinc-700 italic">
-            <CheckCircle2 size={11} className="text-emerald-500" />
-            <span className="text-zinc-300">{tasks.filter(t => t.status === 'completed').length}</span>
-            <span className="text-zinc-800">/</span>
+          {/* Task Progress Counter */}
+          <div className="flex items-center gap-1.5 bg-white/[0.02] px-2 py-1.5 rounded-lg border border-white/5 text-[9px] font-black text-zinc-700 italic">
+            <CheckCircle2 size={10} className="text-emerald-500/50" />
+            <span className="text-zinc-400">{tasks.filter(t => t.status === 'completed').length}</span>
+            <span className="opacity-20">/</span>
             <span>{tasks.length}</span>
           </div>
+
+          <div className="h-4 w-px bg-white/5 mx-1" />
           
+          {/* Live Feed Toggle */}
           <button 
             onClick={() => setIsStreamOpen(!isStreamOpen)}
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[9px] font-black uppercase tracking-wider interactive",
-              isStreamOpen ? "bg-cyan-500/5 border-cyan-500/10 text-cyan-600" : "bg-white/[0.01] border-white/5 text-zinc-700"
+              "p-1.5 rounded-lg border transition-all interactive",
+              isStreamOpen ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" : "bg-white/[0.02] border-white/5 text-zinc-700 hover:text-zinc-400"
             )}
+            title="Live Stream"
           >
-            <Activity size={11} className={isStreamOpen ? 'animate-neural-pulse' : ''} />
-            LIVE_FEED
+            <Activity size={12} className={isStreamOpen ? 'animate-neural-pulse' : ''} />
           </button>
 
-          <div className="h-4 w-px bg-white/10 mx-1" />
-
-          <div className="flex items-center gap-1.5">
+          {/* System Utility */}
+          <div className="flex items-center gap-1 bg-white/[0.02] p-1 rounded-lg border border-white/5">
             <button
               onClick={restartMission}
               disabled={isUpdating}
-              className="p-1.5 hover:text-emerald-400 transition-all interactive"
-              title="Restart Mission"
+              className="p-1 hover:text-emerald-400 transition-all interactive opacity-40 hover:opacity-100"
+              title="Restart"
             >
-              <RotateCcw size={14} className="opacity-40 hover:opacity-100" />
+              <RotateCcw size={12} />
             </button>
             <button
               onClick={cancelMission}
               disabled={isUpdating}
-              className="p-1.5 hover:text-rose-500 transition-all interactive"
-              title="Cancel Mission"
+              className="p-1 hover:text-rose-500 transition-all interactive opacity-40 hover:opacity-100"
+              title="Close"
             >
-              <XCircle size={14} className="opacity-40 hover:opacity-100" />
+              <X size={12} />
             </button>
           </div>
         </div>
@@ -411,14 +431,14 @@ export default function MissionDetailPage() {
           <div className="max-w-4xl mx-auto space-y-8">
             
             {/* Objective Summary */}
-            <section className="control-card rounded-[2.5rem] p-8 relative overflow-hidden backdrop-blur-3xl shadow-2xl group interactive">
-                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                  <Sparkles size={60} />
+            <section className="control-card rounded-[1.5rem] p-5 relative overflow-hidden backdrop-blur-3xl shadow-2xl group interactive">
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Sparkles size={40} />
                 </div>
-                <h3 className="text-[9px] font-black text-cyan-600 uppercase tracking-[0.3em] mb-5 flex items-center gap-2 italic">
+                <h3 className="text-[7px] font-black text-cyan-600 uppercase tracking-[0.4em] mb-3 flex items-center gap-2 italic">
                     <div className="w-1 h-1 rounded-full bg-cyan-500 animate-neural-pulse" /> TARGET_MISSION_PROFILE
                 </h3>
-                <p className="text-lg text-zinc-300 leading-relaxed italic font-black uppercase tracking-tight">
+                <p className="text-[11px] text-zinc-400 leading-relaxed italic font-bold uppercase tracking-widest">
                   "{mission.objective}"
                 </p>
             </section>
@@ -449,7 +469,7 @@ export default function MissionDetailPage() {
                               "group border rounded-[2rem] transition-all duration-300 overflow-hidden shadow-lg interactive",
                               task.status === 'running' ? "bg-cyan-500/[0.02] border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.05)]" : 
                               task.status === 'waiting' ? "bg-amber-500/[0.01] border-amber-500/10 border-dashed" :
-                              task.requires_approval && task.status === 'pending' ? "bg-amber-500/[0.02] border-amber-500/20" :
+                              task.requires_approval && task.status === 'pending' ? "bg-amber-500/[0.02] border-amber-500/30 shadow-[0_0_25px_rgba(245,158,11,0.05)]" :
                               "bg-white/[0.01] border-white/5 hover:bg-white/[0.02] hover:border-white/10"
                             )}
                         >
@@ -490,11 +510,11 @@ export default function MissionDetailPage() {
                                       task.status === 'completed' ? "bg-zinc-900 border-zinc-800 text-zinc-800" :
                                       task.status === 'running' ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-500 animate-pulse" :
                                       task.status === 'waiting' ? "bg-amber-500/5 border-amber-500/10 text-amber-500/60" :
-                                      task.requires_approval && task.status === 'pending' ? "bg-amber-500/10 border-amber-500/20 text-amber-500" :
+                                      task.requires_approval && task.status === 'pending' ? "bg-amber-500/10 border-amber-500/40 text-amber-500 animate-pulse" :
                                       "bg-zinc-950 border-white/5 text-zinc-800"
                                     )}>
                                       {task.status === 'waiting' ? 'BUSY_NODE' : 
-                                       (task.requires_approval && task.status === 'pending' ? 'SAFETY_WAIT' : task.status)}
+                                       (task.requires_approval && task.status === 'pending' ? '✋ APPROVAL_REQUIRED' : task.status)}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2 mt-1">
@@ -552,9 +572,10 @@ export default function MissionDetailPage() {
                                 <div className="flex items-center gap-2 mb-4 text-[8px] font-black uppercase text-zinc-600 tracking-widest">
                                   <Activity size={10} className="text-cyan-500" /> Intelligence Report
                                 </div>
-                                <div className="prose prose-invert prose-sm max-w-none 
-                                  prose-headings:text-white prose-headings:font-bold prose-headings:tracking-tight 
-                                  prose-p:text-zinc-400 prose-p:leading-relaxed
+                                <div className="prose prose-invert max-w-none 
+                                  text-[10.5px] leading-relaxed
+                                  prose-headings:text-white prose-headings:font-bold prose-headings:tracking-tight prose-headings:mb-2 prose-headings:mt-4
+                                  prose-p:text-zinc-400 prose-p:mb-2
                                   prose-li:text-zinc-300
                                   prose-strong:text-cyan-400/80
                                   selection:bg-cyan-500/20">
@@ -609,7 +630,14 @@ export default function MissionDetailPage() {
                   >
                     <div className="flex items-center justify-between mb-2 opacity-50">
                       <span className="font-black uppercase tracking-tighter text-[7px] italic flex items-center gap-1">
-                         <div className="w-1 h-1 rounded-full bg-zinc-800" /> {msg.agent_id.slice(0,10)}
+                         <div className={cn(
+                           "w-1 h-1 rounded-full",
+                           msg.metadata?.status === 'thinking' || msg.metadata?.status === 'calling' ? "bg-cyan-500 animate-pulse" : "bg-zinc-800"
+                         )} /> 
+                         {msg.agent_id.slice(0,10)}
+                         {msg.metadata?.type === 'live_stream' && (msg.metadata?.status === 'thinking' || msg.metadata?.status === 'calling') && (
+                           <span className="ml-2 text-cyan-500 animate-neural-pulse">📡 NEURAL_FLUX_INCOMING</span>
+                         )}
                       </span>
                       <span className="text-[6px] font-black text-zinc-800">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                     </div>

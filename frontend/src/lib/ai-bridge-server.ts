@@ -12,7 +12,7 @@ import scoroExecutor from '../execution/scoro/executor';
 import googleExecutor from '../execution/google/executor';
 // @ts-ignore
 import webExecutor from '../execution/web/executor';
-import { createMessage } from './anima-persistence';
+import { createMessage, updateMessage } from './anima-persistence';
 
 const ABSOLUTE_SKILLS_PATH = '/Users/francescoguidotti/Documents/Lavoro/anima/skills';
 const skillRegistry = new (SkillRegistry as any)(ABSOLUTE_SKILLS_PATH);
@@ -265,6 +265,23 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
     let finalPayloadToReturn = null;
     let allToolExecutions: any[] = [];
     
+    // V3.3: NEURAL STREAM 2.0 (Live Placeholder)
+    let liveMessageId: string | null = null;
+    if (missionId) {
+      try {
+        const liveMsg = await createMessage({
+          mission_id: missionId,
+          agent_id: agentId,
+          role: 'assistant',
+          content: '📡 _Connessione neurale stabilita. In attesa di elaborazione..._',
+          metadata: { type: 'live_stream', status: 'thinking' }
+        });
+        liveMessageId = liveMsg.id;
+      } catch (e) {
+        console.warn("[AI-BRIDGE-SERVER] Fallimento creazione live_stream message (bypass)", e);
+      }
+    }
+
     // V3.2: NEURAL CONSOLIDATION VARIABLES
     let accumulatedAssistantText = "";
     const toolCallFingerprints = new Map<string, string>(); // signature -> result
@@ -327,6 +344,14 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       const cleanText = resultText.replace(/\[CALL:.*?\]/g, "").trim();
       if (cleanText && !accumulatedAssistantText.includes(cleanText)) {
         accumulatedAssistantText += (accumulatedAssistantText ? "\n\n" : "") + cleanText;
+      }
+
+      // STREAM UPDATE: Aggiornamento parziale del pensiero
+      if (liveMessageId) {
+        await updateMessage(liveMessageId, { 
+          content: accumulatedAssistantText || "_Elaborazione in corso..._",
+          metadata: { type: 'live_stream', status: 'thinking', iteration: iterationCount }
+        }).catch(() => {});
       }
 
       const mtcRegex = /\[CALL:\s*([\w:]+)\s*\((.*?)\)\]/g;
@@ -455,6 +480,15 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
             
             if (isMutatingTool) {
                console.log(`[AI-BRIDGE-SERVER] [CRITICAL] Mutating tool detected: ${toolName}. INITIATING SAFETY BLOCK.`);
+               
+               // STREAM UPDATE: Notifica blocco sicurezza in tempo reale
+               if (liveMessageId) {
+                 await updateMessage(liveMessageId, { 
+                   content: accumulatedAssistantText + `\n\n### 🛡️ [SAFETY BLOCK ACTIVATED]\nRichiesta di autorizzazione per: **${toolName}**`,
+                   metadata: { type: 'live_stream', status: 'blocked', tool: toolName }
+                 }).catch(() => {});
+               }
+
                // Return IMMEDIATELY to halt the loop and pass control back to the human
                return {
                  content: (accumulatedAssistantText ? accumulatedAssistantText + "\n\n" : "") + 
@@ -466,6 +500,14 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
                  blockedTool: toolName,
                  blockedArgs: toolArgs
                };
+            }
+
+            // STREAM UPDATE: Segnala esecuzione tool imminente
+            if (liveMessageId) {
+              await updateMessage(liveMessageId, { 
+                content: accumulatedAssistantText + `\n\n> ⚙️ **Esecuzione**: \`${toolName}\`...`,
+                metadata: { type: 'live_stream', status: 'calling', tool: toolName }
+              }).catch(() => {});
             }
 
             // Paperclip Monitoring: Update phase to CALLING_TOOL
@@ -570,14 +612,12 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       // Il loop ricomincerà interrogando di nuovo l'Adapter con il nuovo blocco di 'currentMessages'
     }
 
-    // Se l'agente esaurisce i 3 tentativi consecutivi chiamando SEMPRE tool (non si ferma mai su una stringa)
-    if (!finalPayloadToReturn) {
-      finalPayloadToReturn = {
-        content: accumulatedAssistantText + `\n\n[SISTEMA INTERNO]: Limite di sicurezza raggiunto (${MAX_ITERATIONS}).`,
-        model: modelName,
-        provider: provider,
-        toolExecutions: allToolExecutions
-      };
+    // V3.3: FINAL STREAM UPDATE (Consolidamento conclusivo)
+    if (liveMessageId) {
+      await updateMessage(liveMessageId, { 
+        content: accumulatedAssistantText,
+        metadata: { type: 'live_stream', status: 'completed' }
+      }).catch(() => {});
     }
 
     return finalPayloadToReturn;
