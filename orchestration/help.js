@@ -12,6 +12,14 @@ const fs       = require('fs');
 const path     = require('path');
 const { execSync } = require('child_process');
 
+// Auto-sync all'avvio (Opzionale: puoi commentarlo se vuoi sync solo manuale)
+try {
+  console.log('🔄 Sincronizzazione agenti in corso...');
+  execSync('node orchestration/sync.js', { stdio: 'inherit' });
+} catch (err) {
+  console.error('⚠️  Errore durante il sync automatico:', err.message);
+}
+
 const rl  = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise(resolve => rl.question(q, resolve));
 
@@ -66,17 +74,17 @@ function listAgents() {
   console.log('  ├─────────────────────────────┼──────────────────┼─────────────────────────────────────────┤');
 
   agents.forEach(slug => {
-    const directivePath = path.join(agentsDir, slug, 'directive.md');
+    const directivePath = path.join(agentsDir, slug, 'AGENTS.md');
     let name = slug, department = '—', responsibility = '—';
 
     if (fs.existsSync(directivePath)) {
       const content = fs.readFileSync(directivePath, 'utf8');
-      const nameLine = content.match(/^# Direttiva — (.+)/m);
-      const deptLine = content.match(/\*\*Reparto:\*\* (.+)/);
-      const respLine = content.match(/\n## Responsabilità\n(.+)/);
-      if (nameLine) name           = nameLine[1].trim();
-      if (deptLine) department     = deptLine[1].trim();
-      if (respLine) responsibility = respLine[1].trim();
+      const nameMatch = content.match(/name:\s*(.+)/);
+      const deptMatch = content.match(/department:\s*(.+)/);
+      const respMatch = content.match(/## Responsabilità\n([\s\S]+?)\n\n/);
+      if (nameMatch) name           = nameMatch[1].trim();
+      if (deptMatch) department     = deptMatch[1].trim();
+      if (respMatch) responsibility = respMatch[1].trim();
     }
 
     const col1 = name.substring(0, 27).padEnd(27);

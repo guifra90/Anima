@@ -1,82 +1,53 @@
 # ANIMA — Autonomous Network for Intelligent Mirror Agency
 
-### Sistema Multi-Agente Zero-Human per Mirror Agency
+### Sistema Multi-Agente "Zero-Human" (Standard Agent Companies)
 
-ANIMA è il sistema nervoso centrale di **Mirror**. Non è un semplice assistente, ma un'architettura operativa che coordina autonomamente i reparti dell'agenzia (Finance, Strategy, Creative, Production, HR) attraverso una rete di agenti intelligenti interconnessi.
+ANIMA è il sistema nervoso centrale di **Mirror**. Non è un semplice assistente, ma un'architettura operativa che coordina autonomamente i reparti dell'agenzia attraverso una rete di agenti intelligenti interconnessi, seguendo lo standard [AgentCompanies.io](https://agentcompanies.io/).
 
 ---
 
-## 🚀 Visione: "Gli LLM decidono, il codice esegue"
+## 🏗️ Architettura & Struttura
 
-ANIMA risolve la complessità dei sistemi multi-agente separando la logica decisionale probabilistica (LLM) dall'esecuzione deterministica (Script Node.js). Ogni azione è tracciata, ogni errore è un'opportunità di apprendimento, ogni successo è scalabile.
+Il progetto segue un modello **markdown-first** per la portabilità e l'allineamento degli agenti AI.
 
-## 🏗️ Architettura a 4 Livelli
-
-1.  **Livello 0: Dati & Memoria** — Supabase (PostgreSQL) + pgvector per memoria a lungo termine.
-2.  **Livello 1: Direttive** — SOP (Standard Operating Procedures) in Markdown che definiscono il comportamento di ogni agente.
-3.  **Livello 2: Orchestrazione** — Routing intelligente, gestione segnali e coordinamento tra agenti.
-4.  **Livello 3: Esecuzione** — Script JS/Node.js affidabili per interagire con API (Scoro, Gmail, GCal).
+- **[COMPANY.md](COMPANY.md)**: Entrypoint dell'agenzia, definisce obiettivi, team e agenti.
+- **[doc/](doc/)**: Contiene la documentazione di sistema, roadmap e specifiche tecniche.
+- **[agents/](agents/)**: Libreria di ruoli (es. `AGENTS.md`), ognuno con la propria identità e istruzioni.
+- **[skills/](skills/)**: Capacità operative condivise (es. `SKILL.md`) per interfacciarsi con Google, Scoro e Web.
+- **[orchestration/](orchestration/)**: Nucleo logico per il routing e il coordinamento neurale.
+- **[frontend/](frontend/)**: Dashboard Next.js premium per il monitoraggio e l'interazione.
+- **[.agents/](.agents/)**: Tool e sub-agenti dedicati all'assistenza nello sviluppo del progetto.
 
 ---
 
 ## ⚡ Guida Rapida
 
-### 1. Requisiti
-- Node.js (v18+)
-- Una chiave API di Google Gemini (ottenibile su [aistudio.google.com](https://aistudio.google.com))
-
-### 2. Configurazione
-Copia il file `.env.example` in `.env` e inserisci le tue chiavi:
+### 1. Requisiti & Setup
 ```bash
-GEMINI_API_KEY=tua_chiave_qui
-AI_MODEL=gemini-flash-lite-latest
+cp .env.example .env
+# Inserisci GEMINI_API_KEY e SUPABASE_URL
 ```
 
-### 3. Avvio Dashboard (Frontend)
-L'interfaccia premium di ANIMA permette di navigare tra gli agenti e avviare sessioni creative:
+### 2. Avvio Dashboard
 ```bash
-cd frontend
-npm install
-npm run dev
-# Apri http://localhost:3000
+cd frontend && npm install && npm run dev
 ```
 
-### 4. Utilizzo CLI (Agenti)
-Puoi interagire con il Creative Director direttamente dal terminale:
+### 3. Orchestrazione & Comandi
 ```bash
-node agents/creative-director/run.js
+npm run help # Menu interattivo
 ```
 
 ---
 
-## 🤖 Agenti Core Attivati
+## 🤖 Governance & Portabilità
+Ogni entità di ANIMA è definita da file Markdown con frontmatter YAML, rendendo l'intero sistema "Zero Human" e facilmente esportabile o migrabile tra diversi orchestratori compatibili con lo standard `agentcompanies/v1`.
 
-| Agente | Reparto | Scopo |
-| :--- | :--- | :--- |
-| **Creative Director** | Creative | Concept senior, Brand Thinking, De-costruzione Brief |
-| **CFO** | Finance | Monitoraggio budget e alert margini (in fase di sviluppo) |
-| **Operations Manager** | Operations | Briefing giornaliero Scoro + Gmail (prossimamente) |
+- **Audit Log**: Ogni azione è tracciata su Supabase.
+- **Memory Landscape**: Visione olistica della memoria a lungo termine in `doc/memory-landscape.md`.
 
 ---
 
-## 🛠️ Tooling & Orchestrazione
-
-ANIMA include strumenti di scaffolding per espandere il network:
-- `node orchestration/help.js` — Menu interattivo dei comandi.
-- `node orchestration/add-agent.js` — Crea automaticamente un nuovo agente con tutta la struttura necessaria.
-
----
-
-## 🗺️ Roadmap Sintetica
-
-- [x] **Fase 1**: Setup architettura, CLI e Client AI resiliente.
-- [x] **Fase 2**: Interfaccia Dashboard Next.js (Multi-agente).
-- [/] **Fase 3**: Integrazione persistente con Supabase & Audit Log (In corso).
-- [ ] **Fase 4**: Knowledge Base & RAG (Ingestion Google Drive).
-- [ ] **Fase 5**: Agente Router & Accesso Conversazionale per dipendenti.
-
----
-
-### Contatti & Governance
+### Contatti & Policy
 Mirror Internal Tool. Confidential & Reserved.
 *Sviluppato con passione per l'eccellenza creativa e l'automazione intelligente.*

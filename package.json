@@ -10,7 +10,8 @@
     "start": "node orchestration/help.js",
     "help": "node orchestration/help.js",
     "add-agent": "node orchestration/add-agent.js",
-    "remove-agent": "node orchestration/remove-agent.js"
+    "remove-agent": "node orchestration/remove-agent.js",
+    "sync": "node orchestration/sync.js"
   },
   "keywords": [
     "ai",

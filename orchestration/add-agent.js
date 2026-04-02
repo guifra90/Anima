@@ -189,8 +189,8 @@ validateOutput(mockOutput);
   console.log(`✅ agents/${slug}/prompts/system.md`);
   console.log(`✅ agents/${slug}/tests/${slug}.test.js`);
 
-  // ── Aggiornamento ANIMA.md ────────────────────────────────────────
-  const animaPath  = path.join(__dirname, '..', 'ANIMA.md');
+  // ── Aggiornamento doc/ANIMA.md ────────────────────────────────────────
+  const animaPath  = path.join(__dirname, '..', 'doc', 'ANIMA.md');
   if (fs.existsSync(animaPath)) {
     let   animaContent = fs.readFileSync(animaPath, 'utf8');
 
@@ -209,14 +209,22 @@ validateOutput(mockOutput);
     console.log(`✅ ANIMA.md aggiornato (tabella agenti + changelog)\n`);
   }
 
+  // Sincronizzazione automatica con il DB
+  try {
+    console.log('🚀 Caricamento nuovo agente su Supabase...');
+    execSync('node orchestration/sync.js', { stdio: 'inherit' });
+  } catch (err) {
+    console.error('⚠️  Errore durante il sync automatico:', err.message);
+  }
+
   console.log('╔══════════════════════════════════════════════════════════╗');
   console.log(`║  Agente "${name}" creato con successo!`);
   console.log(`║  Directory: agents/${slug}/`);
   console.log('║');
   console.log('║  Prossimi step:');
-  console.log('║  1. Completa directive.md con input/output dettagliati');
+  console.log('║  1. Completa AGENTS.md con obiettivi e responsabilità');
   console.log('║  2. Personalizza prompts/system.md con il contesto specifico');
-  console.log(`║  3. Aggiungi gli script necessari in execution/${integrations[0] || 'custom'}/`);
+  console.log('║  3. Esegui il sync per confermare il DNA: npm run sync');
   console.log(`║  4. Esegui i test: node agents/${slug}/tests/${slug}.test.js`);
   console.log('╚══════════════════════════════════════════════════════════╝\n');
 }

@@ -8,7 +8,7 @@ const path = require('path');
 // ── Test 1: File essenziali presenti ─────────────────────────────────────────
 function testFilesExist() {
     const requiredFiles = [
-        path.join(__dirname, '..', 'directive.md'),
+        path.join(__dirname, '..', 'AGENTS.md'),
         path.join(__dirname, '..', 'run.js'),
         path.join(__dirname, '..', 'prompts', 'system.md'),
         path.join(__dirname, '..', 'prompts', 'templates', 'few-shot-examples.md'),
@@ -101,17 +101,17 @@ function testAnimaCommandTag() {
     console.log('✅ Test 5 — Tag ANIMA e funzionalità multi-turno: OK');
 }
 
-// ── Test 6: Directive contiene soglia escalation e dipendenze ─────────────────
+// ── Test 6: AGENTS.md contiene soglia escalation e dipendenze ─────────────────
 function testDirective() {
     const directive = fs.readFileSync(
-        path.join(__dirname, '..', 'directive.md'), 'utf8'
+        path.join(__dirname, '..', 'AGENTS.md'), 'utf8'
     );
 
-    assert(directive.includes('Dipendenze'), 'Directive: manca sezione Dipendenze');
-    assert(directive.includes('Soglia Escalation'), 'Directive: manca soglia escalation');
-    assert(directive.includes('5 modalità') || directive.includes('Modalità di Lavoro'), 'Directive: manca sezione modalità');
+    assert(directive.includes('Dipendenze'), 'AGENTS.md: manca sezione Dipendenze');
+    assert(directive.includes('escalation_threshold'), 'AGENTS.md: manca soglia escalation (frontmatter)');
+    assert(directive.includes('Obiettivo'), 'AGENTS.md: manca sezione Obiettivo');
 
-    console.log('✅ Test 6 — Struttura directive completa: OK');
+    console.log('✅ Test 6 — Struttura AGENTS.md completa: OK');
 }
 
 // ── Runner ─────────────────────────────────────────────────────────────────────

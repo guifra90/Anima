@@ -139,8 +139,8 @@ async function main() {
   fs.rmSync(agentDir, { recursive: true, force: true });
   console.log(`\n  ✅ agents/${slug}/ archiviato in .tmp/archived-agents/${slug}/`);
 
-  // ── Aggiornamento ANIMA.md ────────────────────────────────────────
-  const animaPath    = path.join(__dirname, '..', 'ANIMA.md');
+  // ── Aggiornamento doc/ANIMA.md ────────────────────────────────────────
+  const animaPath    = path.join(__dirname, '..', 'doc', 'ANIMA.md');
   if (fs.existsSync(animaPath)) {
     let   animaContent = fs.readFileSync(animaPath, 'utf8');
 
