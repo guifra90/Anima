@@ -14,10 +14,28 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const mission = await createMission(body);
+    let { unit_id, plannerAgentId, priority = 1, ...missionData } = body;
+
+    // Se viene fornito un unit_id, sovrascriviamo il plannerAgentId con il Lead della Unit
+    if (unit_id) {
+      console.log(`[API MISSIONS] Unit selected: ${unit_id}. Resolving Lead...`);
+      const { supabase } = await import('@/lib/supabase');
+      const { data: unit } = await supabase
+        .from('anima_units')
+        .select('lead_id')
+        .eq('id', unit_id)
+        .single();
+      
+      if (unit?.lead_id) {
+        console.log(`[API MISSIONS] Routing to Unit Lead: ${unit.lead_id}`);
+        plannerAgentId = unit.lead_id;
+      }
+    }
+
+    const mission = await createMission({ ...missionData, unit_id, plannerAgentId, priority });
     
-    // Trigger AI Planner to generate tasks
-    const tasks = await planMissionAndCreateTasks(mission.id, mission.objective, body.plannerAgentId);
+    // Trigger AI Planner parameters updated: priority and the resolved plannerAgentId
+    const tasks = await planMissionAndCreateTasks(mission.id, mission.objective, plannerAgentId, priority);
     
     return NextResponse.json({ success: true, mission, tasks });
   } catch (err: any) {

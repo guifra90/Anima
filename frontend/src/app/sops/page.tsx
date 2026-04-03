@@ -20,7 +20,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface SOP {
   id?: string;
   title: string;
-  department: string;
+  units: string[];
   owner: string;
   content: string;
   version: string;
@@ -99,7 +99,7 @@ export default function SOPSPage() {
   const openNewSOP = () => {
     setCurrentSOP({
       title: '',
-      department: 'Operations',
+      units: ['Operations'],
       owner: 'Francesco Guidotti',
       content: '',
       version: '1.0.0',
@@ -111,7 +111,7 @@ export default function SOPSPage() {
 
   const filteredSops = sops.filter(sop => 
     sop.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    sop.department.toLowerCase().includes(searchQuery.toLowerCase())
+    (sop.units && sop.units.some(u => u.toLowerCase().includes(searchQuery.toLowerCase())))
   );
 
   return (
@@ -164,10 +164,10 @@ export default function SOPSPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs text-zinc-500 uppercase font-bold tracking-widest">Reparto</label>
+                  <label className="text-xs text-zinc-500 uppercase font-bold tracking-widest">Unità Operativa</label>
                   <select 
-                    value={currentSOP?.department}
-                    onChange={e => setCurrentSOP(prev => prev ? {...prev, department: e.target.value} : null)}
+                    value={currentSOP?.units?.[0] || ''}
+                    onChange={e => setCurrentSOP(prev => prev ? {...prev, units: [e.target.value]} : null)}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-cyan-400 outline-none transition-all"
                   >
                     <option value="Operations">Operations</option>
@@ -281,7 +281,7 @@ export default function SOPSPage() {
                   <h3 className="text-2xl font-black italic group-hover:text-cyan-400 transition-all mb-4 uppercase leading-tight">{sop.title}</h3>
                   <div className="flex items-center gap-6 text-[10px] text-zinc-500 font-black uppercase tracking-widest italic pt-6 border-t border-white/[0.03]">
                     <span className="flex items-center gap-2">
-                      <Briefcase size={14} className="text-zinc-700" /> {sop.department}
+                      <Briefcase size={14} className="text-zinc-700" /> {sop.units?.join(', ') || 'UNASSIGNED'}
                     </span>
                     <span className="flex items-center gap-2">
                       <Clock size={14} className="text-zinc-700" /> {new Date(sop.last_updated).toLocaleDateString()}

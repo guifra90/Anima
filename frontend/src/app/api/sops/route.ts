@@ -19,10 +19,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { id, title, department, owner, content, access_level } = await req.json();
+    const { id, title, units, owner, content, access_level } = await req.json();
+    
+    // V4.0: Rigoroso supporto Units array
+    const finalUnits = Array.isArray(units) ? units : ['GLOBAL'];
 
-    if (!title || !department || !content || !owner) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!title || !units || !content || !owner) {
+      return NextResponse.json({ error: "Missing required fields (title, units, content, owner)" }, { status: 400 });
     }
 
     let sopId = id;
@@ -40,12 +43,12 @@ export async function POST(req: NextRequest) {
         .from('anima_sops')
         .insert([{
           title,
-          department,
+          units: finalUnits,
           owner,
           content,
           access_level,
           status: 'active',
-          version: '1.1.0'
+          version: '1.2.0'
         }])
         .select()
         .single();
@@ -58,7 +61,7 @@ export async function POST(req: NextRequest) {
         .from('anima_sops')
         .insert([{
           title,
-          department,
+          units: finalUnits,
           owner,
           content,
           access_level,
@@ -94,7 +97,7 @@ export async function POST(req: NextRequest) {
         source_type: 'sop',
         content: chunk,
         embedding: embedding,
-        metadata: { department, title, chunk_index: index }
+        metadata: { units: finalUnits, title, chunk_index: index }
       }]);
     }
 

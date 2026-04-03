@@ -94,7 +94,7 @@ async function ingestAllSOPs() {
     for (const sop of sops) {
       await ingestSOP(sop.id, sop.content, {
         title: sop.title,
-        department: sop.department,
+        units: sop.units,
         version: sop.version
       });
     }

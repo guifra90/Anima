@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import MissionArchitectModal from '@/components/MissionArchitectModal';
 
 interface Mission {
   id: string;
@@ -22,25 +23,27 @@ interface Mission {
 
 export default function MissionsPage() {
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [isArchitectOpen, setIsArchitectOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isArchiveView, setIsArchiveView] = useState(false);
 
-  useEffect(() => {
-    const fetchMissions = async () => {
-      try {
-        const res = await fetch('/api/missions');
-        const data = await res.json();
-        if (data.missions) {
-          setMissions(data.missions);
-        }
-      } catch (err) {
-        console.error("Error fetching missions", err);
-      } finally {
-        setLoading(false);
+  const loadData = async () => {
+    try {
+      const res = await fetch('/api/missions');
+      const data = await res.json();
+      if (data.missions) {
+        setMissions(data.missions);
       }
-    };
-    fetchMissions();
+    } catch (err) {
+      console.error("Error fetching missions", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   const handleDeleteMission = async (e: React.MouseEvent, missionId: string, title: string) => {
@@ -97,14 +100,14 @@ export default function MissionsPage() {
           </p>
         </div>
 
-        <Link 
-            href="/missions/new" 
+        <button 
+            onClick={() => setIsArchitectOpen(true)}
             className="group relative flex items-center gap-3 bg-white text-black px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-xl italic interactive"
         >
             <Plus size={16} strokeWidth={3} />
             INITIALIZE_NEW_SEQUENCE
             <div className="absolute inset-0 bg-cyan-400 rounded-xl blur-[15px] opacity-0 group-hover:opacity-10 transition-opacity" />
-        </Link>
+        </button>
       </header>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
@@ -240,7 +243,16 @@ export default function MissionsPage() {
             <p className="text-[10px] text-zinc-700 font-bold uppercase tracking-[0.2em]">
                 ANIMA OS — Strategic Management v2.4
             </p>
-        </div>
+    
+      <MissionArchitectModal 
+        isOpen={isArchitectOpen} 
+        onClose={() => setIsArchitectOpen(false)}
+        onMissionCreated={(id: string) => {
+          loadData();
+          window.location.href = `/missions/${id}`;
+        }}
+      />
+    </div>
       </main>
     </div>
   );

@@ -113,19 +113,39 @@ class GeminiAdapter extends BaseAdapter {
       const textPart = parts.find(p => p.text);
       const callParts = parts.filter(p => p.functionCall);
 
+      const usage = response.usageMetadata || {};
+      
+      const standardizedUsage = {
+        prompt_tokens: usage.promptTokenCount || 0,
+        completion_tokens: usage.candidatesTokenCount || 0,
+        total_tokens: usage.totalTokenCount || 0
+      };
+
       if (callParts.length > 0) {
         return {
           content: textPart ? textPart.text : '',
           tool_calls: callParts.map(cp => ({
             name: cp.functionCall.name.replace(/__/g, ':'), // Restore original name
             args: cp.functionCall.args
-          }))
+          })),
+          usage: standardizedUsage
         };
       }
-      return textPart ? textPart.text : '';
+      return {
+        content: textPart ? textPart.text : '',
+        usage: standardizedUsage
+      };
     }
 
-    return response.text();
+    const usage = response.usageMetadata || {};
+    return {
+      content: response.text(),
+      usage: {
+        prompt_tokens: usage.promptTokenCount || 0,
+        completion_tokens: usage.candidatesTokenCount || 0,
+        total_tokens: usage.totalTokenCount || 0
+      }
+    };
   }
 }
 

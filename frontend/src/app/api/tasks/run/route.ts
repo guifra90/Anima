@@ -15,7 +15,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, task: result });
   } catch (err: any) {
-    console.error("[API TASK RUN ERROR]", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[API TASK RUN ERROR]", err.stack || err.message);
+    return NextResponse.json({ 
+      error: err.message, 
+      stack: err.stack,
+      cause: err.cause 
+    }, { status: 500 });
   }
 }

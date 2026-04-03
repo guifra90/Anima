@@ -8,7 +8,18 @@ const SkillParser = require('../utils/skill-parser');
 
 class SkillRegistry {
   constructor(rootPath = null) {
-    this.rootPath = rootPath || path.resolve(__dirname, '../../../../skills');
+    // If no path is provided, we try to find the 'skills' folder in the project root
+    this.rootPath = rootPath || 
+                    process.env.ANIMA_SKILLS_PATH || 
+                    path.resolve(process.cwd(), 'skills');
+    
+    // Fallback support for the old relative path if the previous logic fails to find a directory
+    if (!fs.existsSync(this.rootPath)) {
+      const fallbackPath = path.resolve(__dirname, '../../../../skills');
+      if (fs.existsSync(fallbackPath)) {
+        this.rootPath = fallbackPath;
+      }
+    }
     this.skills = new Map();
   }
 

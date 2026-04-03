@@ -58,8 +58,23 @@ async function buildPaperclipPrompt(agent: any, extraContext?: string) {
   
   // 2. Integrazione Skills (Istruzioni MD)
   let skillInstructions = "";
-  if (agent.skills && agent.skills.length > 0) {
-    for (const skillId of agent.skills) {
+  let agentSkills = Array.isArray(agent.skills) ? [...agent.skills] : [];
+
+  // V3.4: AUTO-INJECT MISSION_PLANNER SKILL
+  // Se l'agente è contrassegnato come planner in una missione attiva, forziamo l'SOP di orchestrazione
+  if (extraContext && extraContext.includes('MISSION_PLANNER_PROTOCOL_ACTIVE')) {
+     console.log(`[PROMPT-BUILDER] Auto-injecting INTERNAL_ORCHESTRATION_PROTOCOL for ${agent.name}`);
+     try {
+       const skillPath = path.join(ABSOLUTE_SKILLS_PATH, 'system', 'mission_planner.md');
+       const planningSop = fs.readFileSync(skillPath, 'utf8');
+       skillInstructions += `\n## [AUTO-INIT: MISSION_PLANNER]\n${planningSop}\n`;
+     } catch (err) {
+       console.warn("[PROMPT-BUILDER] Failed to read mission_planner skill, falling back to basic prompt.");
+     }
+  }
+
+  if (agentSkills.length > 0) {
+    for (const skillId of agentSkills) {
       const skill = skillRegistry.getSkill(skillId);
       if (skill) {
         skillInstructions += `\n## [SKILL: ${skill.name}]\n${skill.instructions}\n`;
@@ -150,8 +165,30 @@ export async function executeAiChat({
     await ensureSkillRegistry();
     console.log(`[AI-BRIDGE-SERVER] Skills loaded: ${skillRegistry.getAllSkills().length}`);
 
-    // 2. Determiniamo il provider e la configurazione
-    const model = agent.anima_ai_models;
+    // 2. Determiniamo il provider e la configurazione con NEURAL FALLBACK (Safety first)
+    let model = agent.anima_ai_models;
+    
+    // Se il modello non è attivo, cerchiamo un fallback attivo
+    // V3.5: Consideriamo valido il modello anche se la chiave nel DB è assente,
+    // poiché verrà risolta successivamente dalle variabili d'ambiente (OpenRouter/Anthropic/etc.)
+    if (!model || !model.is_active) {
+      console.warn(`[AI-BRIDGE-SERVER] [FALLBACK] Modello ${agent.model_id} non trovato o disattivato. Ricerca fallback...`);
+      
+      const { data: fallbackModels } = await supabase
+        .from('anima_ai_models')
+        .select('*')
+        .eq('is_active', true)
+        .neq('provider', 'ollama') // Evitiamo Ollama come fallback automatico se siamo in cloud
+        .limit(1);
+
+      if (fallbackModels && fallbackModels.length > 0) {
+        model = fallbackModels[0];
+        console.log(`[AI-BRIDGE-SERVER] [FALLBACK] Hot-swap eseguito con successo su: ${model.id}`);
+      } else {
+        console.error("[AI-BRIDGE-SERVER] [CRITICAL] Nessun modello cloud attivo trovato nel DB!");
+      }
+    }
+
     const provider = model?.provider || process.env.AI_PROVIDER || 'gemini';
     const modelName = model?.id || agent.model_id || process.env.AI_MODEL || 'gemini-1.5-flash';
     
@@ -223,11 +260,29 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       temperature: options?.temperature !== undefined ? options.temperature : 0.7
     };
 
+    // V3.5: NEURAL KEY RESOLUTION
+    // Priorità: 1. Chiave nel record DB del modello, 2. Env var specifica per provider, 3. Config agente
+    const resolveApiKey = (provider: string, modelApiKey?: string, agentApiKey?: string): string | undefined => {
+      if (modelApiKey) return modelApiKey;
+      if (agentApiKey) return agentApiKey;
+      // Fallback automatico alle env var per provider (configurazione standard)
+      switch (provider) {
+        case 'openrouter': return process.env.OPENROUTER_API_KEY;
+        case 'gemini':     return process.env.GEMINI_API_KEY;
+        case 'anthropic':  return process.env.ANTHROPIC_API_KEY;
+        case 'openai':     return process.env.OPENAI_API_KEY;
+        default:           return undefined;
+      }
+    };
+
+    const resolvedApiKey = resolveApiKey(provider, model?.api_key, agent.adapter_config?.apiKey);
+    
     const adapterConfig = {
-      apiKey: model?.api_key || agent.adapter_config?.apiKey,
+      apiKey: resolvedApiKey,
       baseUrl: model?.base_url || agent.adapter_config?.baseUrl,
       model: modelName
     };
+
 
     // 5. Recupero Connessioni ed Esecuzione Tool Locale
     const { data: agentConnections } = await supabase
@@ -335,6 +390,24 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       iterationCount++;
       let result = await adapter.chat(currentMessages, promptWithTools, chatOptions);
 
+      // V3.4: NEURAL BILLING & COST TRACKING
+      let costInEur = 0;
+      if (result.usage && model) {
+        const inputCost = (result.usage.prompt_tokens / 1000) * (model.input_cost_1k || 0);
+        const outputCost = (result.usage.completion_tokens / 1000) * (model.output_cost_1k || 0);
+        costInEur = inputCost + outputCost;
+        
+        console.log(`[NEURAL-BILLING] Agent: ${agent.name} // Model: ${modelName} // Cost: ${costInEur.toFixed(6)}€`);
+        
+        // Aggiornamento atomico della spesa dell'agente (non-blocking)
+        supabase.rpc('increment_agent_spend', { 
+          p_agent_id: agentId, 
+          p_amount: costInEur 
+        }).then(({error}) => {
+          if (error) console.error("[NEURAL-BILLING] Error updating agent spend:", error.message);
+        });
+      }
+
       // 5.5. Parsing Manual Tool Calls (MTC) - Il "Paperclip Way"
       const resultText = typeof result === 'string' ? result : result.content || "";
       
@@ -350,7 +423,13 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       if (liveMessageId) {
         await updateMessage(liveMessageId, { 
           content: accumulatedAssistantText || "_Elaborazione in corso..._",
-          metadata: { type: 'live_stream', status: 'thinking', iteration: iterationCount }
+          metadata: { 
+            type: 'live_stream', 
+            status: 'thinking', 
+            iteration: iterationCount,
+            usage: result.usage,
+            cost: costInEur
+          }
         }).catch(() => {});
       }
 

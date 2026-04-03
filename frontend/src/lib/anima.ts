@@ -11,11 +11,17 @@ import {
  * e l'interazione con i motori AI nel contesto del frontend (v2).
  */
 
+const REASONING_MODELS = ['pro', 'gpt-4', 'sonnet', 'o1', 'o3', 'r1', '3.5-sonnet', '3.7-sonnet'];
+const FAST_MODELS = ['mini', 'flash', 'haiku', 'v3', 'deepseek-chat'];
+
+// Transition flags
+const LEGACY_SYNC_DEPARTMENT = false; // Set to false to stop writing to 'department' column
+
 export interface AgentInfo {
   id: string;
   name: string;
   role: string;
-  department: string;
+  units?: string[]; // Multiple units support
   status: string;
   bio?: string;
   avatar_url?: string;
@@ -36,9 +42,13 @@ export interface AgentInfo {
   created_at?: string;
 }
 
-export interface Department {
+export interface Unit {
   id: string;
   name: string;
+  lead_id?: string;
+  description?: string;
+  reports_to?: string; // Recursive hierarchy support
+  connections?: string[]; // Inter-unit strategist links
 }
 
 export interface AIModel {
@@ -48,6 +58,7 @@ export interface AIModel {
   api_key?: string;
   base_url?: string;
   is_active: boolean;
+  category?: 'power' | 'fast' | 'specialized'; // Added for logical grouping
 }
 
 export interface Mission {
@@ -58,6 +69,8 @@ export interface Mission {
   execution_mode?: 'manual' | 'autonomous';
   is_locked?: boolean;
   plannerAgentId?: string;
+  unit_id?: string; // New Unit-based mission support
+  priority?: number; // New Priority support
   created_at?: string;
   updated_at?: string;
 }
@@ -72,6 +85,7 @@ export interface Task {
   requires_approval?: boolean;
   result?: string;
   order_index: number;
+  priority?: number; // Priority (1-10) for the queue
   created_at?: string;
   updated_at?: string;
 }
@@ -137,6 +151,11 @@ export async function createAgent(agentData: Partial<AgentInfo>) {
   const dataToInsert: any = { ...agentData };
   delete dataToInsert.active_connections;
   
+  // Transition logic: stop writing to legacy 'department' column
+  if (!LEGACY_SYNC_DEPARTMENT) {
+    delete dataToInsert.department;
+  }
+  
   // Sanitize empty strings to null for nullable foreign keys
   if (dataToInsert.reports_to === "") dataToInsert.reports_to = null;
   if (dataToInsert.model_id === "") dataToInsert.model_id = null;
@@ -166,6 +185,11 @@ export async function createAgent(agentData: Partial<AgentInfo>) {
 export async function updateAgent(id: string, agentData: Partial<AgentInfo>) {
   const dataToUpdate: any = { ...agentData };
   delete dataToUpdate.active_connections;
+
+  // Transition logic: stop writing to legacy 'department' column
+  if (!LEGACY_SYNC_DEPARTMENT) {
+    delete dataToUpdate.department;
+  }
 
   // Sanitize empty strings to null for nullable foreign keys
   if (dataToUpdate.reports_to === "") dataToUpdate.reports_to = null;
@@ -222,39 +246,167 @@ export async function deleteAgent(id: string): Promise<boolean> {
   return true;
 }
 
-/** --- DEPARTMENTS --- **/
+/** --- UNITS --- **/
 
-export async function listDepartments(): Promise<Department[]> {
-  const { data, error } = await supabase.from('anima_departments').select('*').order('name');
+export async function listUnits(): Promise<Unit[]> {
+  const { data, error } = await supabase.from('anima_units').select('*').order('name');
   if (error) {
-    console.error("[ANIMA LIB] Error listing departments:", error.message);
+    console.error("[ANIMA LIB] Error listing units:", error.message);
     return [];
   }
   return data || [];
 }
 
-export async function createDepartment(dept: Department) {
-  const { data, error } = await supabase.from('anima_departments').insert([dept]).select().single();
+export async function createUnit(unit: Partial<Unit>) {
+  const dataToInsert = { ...unit };
+  delete dataToInsert.connections;
+
+  const { data, error } = await supabase.from('anima_units').insert([dataToInsert]).select().single();
   if (error) throw error;
+  
+  if (unit.connections && unit.connections.length > 0) {
+    await syncUnitConnections(data.id, unit.connections);
+  }
+  
   return data;
 }
 
-export async function deleteDepartment(id: string) {
-  const { error } = await supabase.from('anima_departments').delete().eq('id', id);
+export async function deleteUnit(id: string) {
+  const { error } = await supabase.from('anima_units').delete().eq('id', id);
   if (error) throw error;
 }
 
-export async function updateDepartment(id: string, name: string) {
-  const { data, error } = await supabase.from('anima_departments').update({ name }).eq('id', id).select().single();
+export async function updateUnit(id: string, unitData: Partial<Unit>) {
+  const dataToUpdate = { ...unitData };
+  delete dataToUpdate.connections;
+
+  const { data, error } = await supabase.from('anima_units').update(dataToUpdate).eq('id', id).select().single();
   if (error) throw error;
+
+  if (unitData.connections) {
+    await syncUnitConnections(id, unitData.connections);
+  }
+
   return data;
+}
+
+/** --- UNIT CONNECTIONS --- **/
+
+export async function listUnitConnections(unitId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('anima_unit_connections')
+    .select('related_unit_id')
+    .eq('unit_id', unitId);
+  
+  if (error) return [];
+  return data.map(d => d.related_unit_id);
+}
+
+export async function syncUnitConnections(unitId: string, relatedUnitIds: string[]) {
+  // First delete existing
+  await supabase.from('anima_unit_connections').delete().eq('unit_id', unitId);
+  
+  if (relatedUnitIds.length === 0) return;
+
+  const toInsert = relatedUnitIds.map(id => ({ unit_id: unitId, related_unit_id: id }));
+  const { error } = await supabase.from('anima_unit_connections').insert(toInsert);
+  if (error) throw error;
+}
+
+/** --- UNITS --- **/
+/** Helper: Ottiene una stringa formattata delle unità dell'agente */
+export function getAgentUnits(agent: AgentInfo): string {
+  if (!agent.units || agent.units.length === 0) return 'UNASSIGNED';
+  return agent.units.join(' / ');
+}
+
+/** --- LEGACY DEPARTMENT ALIASES (Transitioned to Units) --- **/
+/** @deprecated Usare listUnits */
+export const listDepartments = listUnits;
+/** @deprecated Usare createUnit */
+export const createDepartment = createUnit;
+/** @deprecated Usare updateUnit */
+export const updateDepartment = updateUnit;
+/** @deprecated Usare deleteUnit */
+export const deleteDepartment = deleteUnit;
+
+export async function getUnitMetrics(unitId: string) {
+  // Count tasks by status for all missions in this unit
+  const { data: missions, error: mError } = await supabase
+    .from('anima_missions')
+    .select('id')
+    .eq('unit_id', unitId);
+
+  if (mError || !missions) return { running: 0, waiting: 0, score: 0, label: 'IDLE' };
+
+  const missionIds = missions.map(m => m.id);
+  if (missionIds.length === 0) return { running: 0, waiting: 0, score: 0, label: 'IDLE' };
+
+  const { data: tasks, error: tError } = await supabase
+    .from('anima_tasks')
+    .select('status')
+    .in('mission_id', missionIds)
+    .in('status', ['running', 'waiting']);
+
+  if (tError || !tasks) return { running: 0, waiting: 0, score: 0, label: 'IDLE' };
+
+  const running = tasks.filter(t => t.status === 'running').length;
+  const waiting = tasks.filter(t => t.status === 'waiting').length;
+  const score = (running * 2) + waiting;
+
+  let label = 'NOMINAL';
+  if (score === 0) label = 'IDLE';
+  else if (score < 4) label = 'LOW';
+  else if (score > 10) label = 'HIGH';
+
+  return { running, waiting, score, label };
 }
 
 
 /** --- AI MODELS --- **/
 
-export async function listAiModels(): Promise<AIModel[]> {
-  const { data, error } = await supabase.from('anima_ai_models').select('*').order('name');
+/**
+ * Elenca i modelli AI attivi o configurati, raggruppandoli per categoria logica.
+ */
+export async function getGroupedActiveModels(): Promise<Record<string, AIModel[]>> {
+  const { data, error } = await supabase
+    .from('anima_ai_models')
+    .select('*')
+    .eq('is_active', true)
+    .order('name');
+
+  if (error) {
+    console.error("[ANIMA LIB] Error listing active AI models:", error.message);
+    return { '⚡ POWER & REASONING': [], '🚀 FAST & EFFICIENT': [], '🧪 SPECIALIZED & FREE': [] };
+  }
+
+  const grouped: Record<string, AIModel[]> = {
+    '⚡ POWER & REASONING': [],
+    '🚀 FAST & EFFICIENT': [],
+    '🧪 SPECIALIZED & FREE': []
+  };
+
+  (data || []).forEach(model => {
+    const id = model.id.toLowerCase();
+    // Euristiche di raggruppamento basate sul nome/ID
+    if (id.includes('pro') || id.includes('gpt-4') || id.includes('sonnet') || id.includes('o1') || id.includes('o3') || id.includes('r1')) {
+      grouped['⚡ POWER & REASONING'].push(model);
+    } else if (id.includes('mini') || id.includes('flash') || id.includes('haiku') || id.includes('v3')) {
+      grouped['🚀 FAST & EFFICIENT'].push(model);
+    } else {
+      grouped['🧪 SPECIALIZED & FREE'].push(model);
+    }
+  });
+
+  return grouped;
+}
+
+export async function listAiModels(onlyActive = true): Promise<AIModel[]> {
+  let query = supabase.from('anima_ai_models').select('*').order('name');
+  if (onlyActive) {
+    query = query.eq('is_active', true);
+  }
+  const { data, error } = await query;
   if (error) {
     console.error("[ANIMA LIB] Error listing AI models:", error.message);
     return [];

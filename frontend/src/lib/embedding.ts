@@ -22,7 +22,8 @@ export async function getEmbedding(text: string): Promise<number[]> {
   try {
     if (provider === 'google') {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-      const model = genAI.getGenerativeModel({ model: "gemini-embedding-2-flash" }, { apiVersion: 'v1' });
+      // V3.5: Utilizzo del modello stabile text-embedding-004
+      const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
       const result = await model.embedContent(text);
       return result.embedding.values;
     }

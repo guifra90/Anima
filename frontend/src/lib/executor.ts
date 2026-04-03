@@ -31,18 +31,18 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
     
     // 1.5. Concurrency Check (Agent Lock) - Paperclip Style
     if (agent.current_task_id && agent.current_task_id !== taskId) {
-      console.warn(`[EXECUTOR] Agent ${agent.name} is BUSY in task ${agent.current_task_id}. Queueing...`);
+      console.warn(`[EXECUTOR] Agent ${agent.name} is BUSY in task ${agent.current_task_id}. Adding to Neural Queue...`);
       
       await createMessage({
         mission_id: task.mission_id,
         agent_id: task.agent_id,
         role: 'system',
-        content: `[NEURAL QUEUE] ${agent.name} è impegnato con un altro task. In attesa di rilascio risorsa...`,
-        metadata: { type: 'resource_busy', busyInTaskId: agent.current_task_id }
+        content: `[NEURAL QUEUE] ${agent.name} è impegnato. Task "${task.title}" (Priorità: ${task.priority}) messo in coda.`,
+        metadata: { type: 'resource_busy', busyInTaskId: agent.current_task_id, priority: task.priority }
       });
 
       await updateTask(taskId, { status: 'waiting' });
-      return { success: false, status: 'RESOURCE_BUSY', busyInTaskId: agent.current_task_id };
+      return { success: false, status: 'QUEUED', busyInTaskId: agent.current_task_id };
     }
 
     // 2. Transizione a RUNNING e aggiornamento status agente (Live Labeling)
@@ -115,25 +115,34 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
         content: m.content
       }));
 
-    // 4.6. Update Phase: THINKING
+    // 4.6. PLANNER PROTOCOL (V3.4: Paperclip Orchestration)
+    let extraContext = "";
+    if (mission?.plannerAgentId === agent.id) {
+       console.log(`[EXECUTOR] Planner detected: Activating MISSION_PLANNER_PROTOCOL for ${agent.name}`);
+       extraContext = "MISSION_PLANNER_PROTOCOL_ACTIVE";
+    }
+
+    // 4.7. Update Phase: THINKING
     await (await import('./supabase')).supabase
       .from('anima_agents')
       .update({ current_phase: 'THINKING...' })
       .eq('id', task.agent_id);
 
     // 5. Chiamata al bridge AI (Agnostico)
+    console.log(`[EXECUTOR] Executing animaChat for agent: ${agent.id} (Model: ${agent.model_id})`);
     const chatResult = await animaChat({
       agentId: agent.id,
       messages: [
         ...chatHistory,
         { role: 'user', content: executionPrompt }
       ],
-      systemPrompt: agent.system_prompt,
+      systemPrompt: (agent.system_prompt || "") + (extraContext ? `\n[PROTOCOL_ACTIVE: ${extraContext}]` : ""),
       missionId: task.mission_id,
       options: { 
         bypassSafety: !!options.bypassSafety // V3.3: Pass the authority flag from UI approval
       }
     });
+    console.log(`[EXECUTOR] animaChat call completed for ${agent.id}`);
 
     const resultText = chatResult.content;
     const isSafetyBlock = chatResult.requiresApproval;
@@ -305,7 +314,7 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
     return updated;
 
   } catch (err: any) {
-    console.error(`[EXECUTOR ERROR] Task ${taskId}:`, err.message);
+    console.error(`[EXECUTOR CRITICAL ERROR] Task ${taskId} FAILED:`, err.stack || err.message);
     
     // Recuperiamo il mission_id se possibile dal task caricato nel try
     // Nota: 'task' potrebbe essere undefined se l'errore è avvenuto al recupero del task
@@ -356,6 +365,7 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
         .single();
         
       if (currentTask?.agent_id) {
+        // Liberiamo l'agente
         await (await import('./supabase')).supabase
           .from('anima_agents')
           .update({ 
@@ -364,10 +374,33 @@ export async function runTaskExecution(taskId: string, options: { bypassSafety?:
             current_phase: null 
           })
           .eq('id', currentTask.agent_id);
+        
         console.log(`[EXECUTOR] Agent ${currentTask.agent_id} RELEASED back to pool.`);
+
+        // [NEURAL AUTO-PICK] — Cerca il prossimo task in coda per questo agente
+        const { data: nextQueued } = await (await import('./supabase')).supabase
+          .from('anima_tasks')
+          .select('id, title, priority')
+          .eq('agent_id', currentTask.agent_id)
+          .eq('status', 'waiting')
+          .order('priority', { ascending: false }) // Priorità 10 -> 1
+          .order('created_at', { ascending: true }) // FIFO per parità di priorità
+          .limit(1);
+
+        if (nextQueued && nextQueued.length > 0) {
+          const next = nextQueued[0];
+          console.log(`[EXECUTOR] Neural Queue: Picking next task for ${currentTask.agent_id}: ${next.title} (Priority: ${next.priority})`);
+          
+          // Avviamo il prossimo task con un piccolo delay per stabilizzare il DB
+          setTimeout(() => {
+            runTaskExecution(next.id).catch(err => {
+              console.error(`[EXECUTOR] Errore nel pick automatico per ${next.id}:`, err.message);
+            });
+          }, 1500);
+        }
       }
     } catch (e: any) {
-      console.error("[EXECUTOR] Failed to release agent:", e.message);
+      console.error("[EXECUTOR] Failed to release or pick next task:", e.message);
     }
   }
 }

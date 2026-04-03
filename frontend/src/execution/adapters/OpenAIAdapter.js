@@ -24,12 +24,20 @@ class OpenAIAdapter extends BaseAdapter {
     const model = options.model || this.config.model || 'gpt-4o-mini';
     const msgs = this.formatMessagesWithSystem(messages, system);
     
-    const response = await this.client.chat.completions.create({
+    const completion = await this.client.chat.completions.create({
       model,
       max_tokens: options.maxTokens || 1000,
       messages: msgs,
     });
-    return response.choices[0].message.content;
+
+    return {
+      content: completion.choices[0].message.content,
+      usage: {
+        prompt_tokens: completion.usage?.prompt_tokens || 0,
+        completion_tokens: completion.usage?.completion_tokens || 0,
+        total_tokens: completion.usage?.total_tokens || 0
+      }
+    };
   }
 }
 

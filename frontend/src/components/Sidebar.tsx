@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { name: 'Hiring Hall', href: '/team', icon: Users },
   { name: 'Agent Hub', href: '/agents', icon: Bot },
   { name: 'Knowledge Base', href: '/sops', icon: ShieldCheck },
-  { name: 'Departments', href: '/departments', icon: Briefcase },
+  { name: 'Operating Units', href: '/units', icon: Briefcase },
   { name: 'Governance', href: '/governance', icon: Shield },
   { name: 'Connections', href: '/connections', icon: Key },
 ];
@@ -117,11 +117,32 @@ export function Sidebar() {
               </div>
               <span className="text-xs font-bold tracking-tight uppercase italic">Manual & Docs</span>
             </Link>
+            <Link
+              href="/logs"
+              className={cn(
+                "group flex items-center gap-3 px-3 py-2 rounded-xl transition-all border border-transparent hover:border-white/5",
+                pathname.startsWith('/logs') ? "bg-white/[0.04] text-white border-white/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]"
+              )}
+            >
+              <div className={cn(
+                "p-1.5 rounded-lg transition-colors",
+                pathname.startsWith('/logs') ? "bg-indigo-500/10 text-indigo-400" : "text-zinc-600 group-hover:text-zinc-400"
+              )}>
+                <BarChart3 size={14} />
+              </div>
+              <span className="text-xs font-bold tracking-tight uppercase italic">Audit Matrix</span>
+            </Link>
              <Link
               href="/settings"
-              className="group flex items-center gap-3 px-3 py-2 text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02] rounded-xl transition-all border border-transparent hover:border-white/5"
+              className={cn(
+                "group flex items-center gap-3 px-3 py-2 rounded-xl transition-all border border-transparent hover:border-white/5",
+                pathname.startsWith('/settings') ? "bg-white/[0.04] text-white border-white/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]"
+              )}
             >
-              <div className="p-1.5 rounded-lg text-zinc-600 group-hover:text-zinc-400">
+              <div className={cn(
+                "p-1.5 rounded-lg transition-colors",
+                pathname.startsWith('/settings') ? "bg-cyan-500/10 text-cyan-400" : "text-zinc-600 group-hover:text-zinc-400"
+              )}>
                 <Settings size={14} />
               </div>
               <span className="text-xs font-bold tracking-tight uppercase italic">System Core</span>

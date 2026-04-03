@@ -148,7 +148,14 @@ class OpenRouterAdapter extends BaseAdapter {
         }));
       }
 
-      return message;
+      return {
+        ...message,
+        usage: {
+          prompt_tokens: response.usage?.prompt_tokens || 0,
+          completion_tokens: response.usage?.completion_tokens || 0,
+          total_tokens: response.usage?.total_tokens || 0
+        }
+      };
     } catch (err) {
       console.error(`  [OpenRouterAdapter] Error:`, err.message);
       throw err;

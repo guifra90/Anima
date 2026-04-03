@@ -9,7 +9,7 @@ async function testRAG() {
     // 1. Creazione SOP di test
     const testSop = {
       title: "Protocollo Mirror per il Colore Neon",
-      department: "Creative",
+      units: ["Creative"],
       owner: "Test Script",
       content: "Mirror Agency utilizza sempre il Neon Cyan (#22d3ee) per gli accenti di interfaccia. Questo colore rappresenta l'anima tecnologica e specchiante del brand. Non usare mai il rosso per i pulsanti di azione, ma solo varianti di ciano."
     };
@@ -26,7 +26,7 @@ async function testRAG() {
 
     // 2. Ingestion
     console.log("2. Esecuzione Ingestion (Embedding)...");
-    await ingestSOP(sop.id, testSop.content, { title: testSop.title });
+    await ingestSOP(sop.id, testSop.content, { title: testSop.title, units: testSop.units });
     console.log("✅ Ingestione completata.");
 
     // 3. Ricerca Semantica

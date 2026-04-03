@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listDepartments, createDepartment, deleteDepartment, updateDepartment } from '@/lib/anima';
+import { listUnits, createUnit, deleteUnit, updateUnit } from '@/lib/anima';
 
 export async function GET() {
   try {
-    const departments = await listDepartments();
-    return NextResponse.json({ success: true, departments });
+    const units = await listUnits();
+    return NextResponse.json({ success: true, units });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -13,8 +13,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const newDept = await createDepartment(body);
-    return NextResponse.json({ success: true, department: newDept });
+    const newUnit = await createUnit(body);
+    return NextResponse.json({ success: true, unit: newUnit });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -25,7 +25,7 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-    await deleteDepartment(id);
+    await deleteUnit(id);
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -35,12 +35,11 @@ export async function DELETE(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name } = body;
-    if (!id || !name) return NextResponse.json({ error: "Missing id or name" }, { status: 400 });
-    const updated = await updateDepartment(id, name);
-    return NextResponse.json({ success: true, department: updated });
+    const { id, ...data } = body;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    const updated = await updateUnit(id, data);
+    return NextResponse.json({ success: true, unit: updated });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-

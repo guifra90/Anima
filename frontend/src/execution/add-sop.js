@@ -16,7 +16,8 @@ async function main() {
 
   try {
     const title = await question("Titolo della SOP: ");
-    const department = await question("Reparto (Operations/Creative/Finance/Strategy/Production/HR): ");
+    const unitsInput = await question("Unità operative (es: Strategy, Creative - separate da virgola): ");
+    const units = unitsInput.split(',').map(u => u.trim()).filter(u => u !== '');
     const owner = await question("Owner (Nome e Cognome): ");
     
     console.log("\n--- Contenuto della SOP ---");
@@ -46,7 +47,7 @@ async function main() {
       .from('anima_sops')
       .insert([{
         title,
-        department,
+        units,
         owner,
         content,
         status: 'active'
@@ -58,7 +59,7 @@ async function main() {
 
     // 2. Avvia l'ingestion vettoriale
     console.log("✅ Metadata salvati. Avvio Ingestion Engine per RAG...");
-    const { chunks } = await ingestSOP(sop.id, content, { department, title });
+    const { chunks } = await ingestSOP(sop.id, content, { units, title });
 
     console.log(`\n🎉 SOP SALVATA E INDICIZZATA CON SUCCESSO!`);
     console.log(`ID: ${sop.id}`);

@@ -8,7 +8,7 @@ async function main() {
       .from('anima_sops')
       .select('*')
       .eq('status', 'active')
-      .order('department', { ascending: true });
+      .order('title', { ascending: true });
 
     if (error) throw error;
 
@@ -18,10 +18,11 @@ async function main() {
     }
 
     sops.forEach(sop => {
-      console.log(`[${sop.department}] ${sop.title}`);
+      const unitsLabel = (sop.units || []).join(', ') || 'N/A';
+      console.log(`[${unitsLabel}] ${sop.title}`);
       console.log(`   ID: ${sop.id}`);
       console.log(`   Owner: ${sop.owner} | Versione: ${sop.version}`);
-      console.log(`   Ultimo Aggiornamento: ${new Date(sop.last_updated).toLocaleString()}\n`);
+      console.log(`   Ultimo Aggiornamento: ${new Date(sop.updated_at).toLocaleString()}\n`);
     });
 
   } catch (error) {

@@ -8,12 +8,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import ModelManagementModal from '@/components/ModelManagementModal';
+import { getGroupedActiveModels } from '@/lib/anima';
 
 interface Agent {
   id: string;
   name: string;
   role: string;
-  department: string;
+  units?: string[];
   status: string;
   bio?: string;
   avatar_url?: string;
@@ -31,7 +33,7 @@ interface Agent {
   last_activity_at?: string;
 }
 
-interface Department {
+interface Unit {
   id: string;
   name: string;
 }
@@ -46,12 +48,13 @@ interface AIModel {
 
 export default function HiringHall() {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [aiModels, setAiModels] = useState<AIModel[]>([]);
+  const [groupedModels, setGroupedModels] = useState<Record<string, AIModel[]>>({});
   
   const [isLoading, setIsLoading] = useState(true);
   const [isHiringModalOpen, setIsHiringModalOpen] = useState(false);
-  const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
+  const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   
@@ -63,7 +66,7 @@ export default function HiringHall() {
     id: '',
     name: '',
     role: '',
-    department: '',
+    units: [],
     bio: '',
     model_id: '',
     reports_to: '',
@@ -109,21 +112,25 @@ export default function HiringHall() {
   const fetchInitialData = async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const [agRes, depRes, modRes] = await Promise.all([
+      const [agRes, unitRes, modRes] = await Promise.all([
         fetch('/api/agents'),
-        fetch('/api/departments'),
+        fetch('/api/units'),
         fetch('/api/ai-models')
       ]);
       
-      const [agData, depData, modData] = await Promise.all([
+      const [agData, unitData, modData] = await Promise.all([
         agRes.json(),
-        depRes.json(),
+        unitRes.json(),
         modRes.json()
       ]);
       
       if (agData.agents) setAgents(agData.agents);
-      if (depData.departments) setDepartments(depData.departments);
+      if (unitData.units) setUnits(unitData.units);
       if (modData.models) setAiModels(modData.models);
+
+      // Fetch Grouped Models
+      const grouped = await getGroupedActiveModels();
+      setGroupedModels(grouped);
 
       // Fetch Skills and Connections
       const [skillsRes, connRes] = await Promise.all([
@@ -251,7 +258,7 @@ export default function HiringHall() {
       id: '',
       name: '',
       role: '',
-      department: departments[0]?.id || '',
+      units: [units[0]?.id || ''],
       bio: '',
       model_id: aiModels[0]?.id || '',
       reports_to: '',
@@ -274,7 +281,7 @@ export default function HiringHall() {
       id: agent.id,
       name: agent.name,
       role: agent.role,
-      department: agent.department || '',
+      units: agent.units || [],
       bio: agent.bio || '',
       model_id: agent.model_id || '',
       reports_to: agent.reports_to || '',
@@ -392,7 +399,7 @@ export default function HiringHall() {
   const filteredAgents = agents.filter(a => 
     a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (a.department && a.department.toLowerCase().includes(searchQuery.toLowerCase()))
+    (a.units?.some(u => u.toLowerCase().includes(searchQuery.toLowerCase())))
   );
 
   // --- ORG CHART DATA BUILDER ---
@@ -467,7 +474,7 @@ export default function HiringHall() {
         </div>
         <div className="w-px h-6 bg-white/5 mx-2" />
         <div className="flex bg-white/[0.01] p-1 rounded-xl border border-white/5">
-            <button onClick={() => setIsDeptModalOpen(true)} className="px-4 py-2 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600 hover:text-cyan-400 transition-colors italic">UNITS</button>
+            <button onClick={() => setIsUnitModalOpen(true)} className="px-4 py-2 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600 hover:text-cyan-400 transition-colors italic">UNITS</button>
             <button onClick={() => setIsModelModalOpen(true)} className="px-4 py-2 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-600 hover:text-cyan-400 transition-colors italic">ENGINES</button>
         </div>
       </div>
@@ -611,7 +618,7 @@ export default function HiringHall() {
                 <div className="mb-6">
                   <h3 className="text-xl font-black italic tracking-tight mb-1 group-hover:text-cyan-400 transition-colors uppercase">{agent.name}</h3>
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-zinc-700 font-black uppercase tracking-widest italic">{agent.department || 'CORE_UNIT'}</span>
+                    <span className="text-[9px] text-zinc-700 font-black uppercase tracking-widest italic">{agent.units?.[0] || 'CORE_UNIT'}</span>
                     <div className="w-1 h-1 bg-zinc-900 rounded-full" />
                     <span className="text-[9px] text-cyan-700 font-black uppercase tracking-widest italic">{agent.role}</span>
                   </div>
@@ -643,8 +650,14 @@ export default function HiringHall() {
                           disabled={updatingAgentId !== null}
                         >
                           <option value="" disabled>UNALLOCATED</option>
-                          {aiModels.map(m => (
-                            <option key={m.id} value={m.id} className="bg-[#0E0E0E] text-white py-2">{m.name.toUpperCase()}</option>
+                          {Object.entries(groupedModels).map(([category, models]) => (
+                            <optgroup key={category} label={category} className="bg-[#0E0E0E] text-zinc-500 text-[8px] font-black italic">
+                              {models.map(m => (
+                                <option key={m.id} value={m.id} className="bg-[#0E0E0E] text-white py-2">
+                                  {m.name.toUpperCase()}
+                                </option>
+                              ))}
+                            </optgroup>
                           ))}
                         </select>
                       </div>
@@ -660,7 +673,7 @@ export default function HiringHall() {
         <main className="max-w-7xl mx-auto bg-white/[0.02] border border-white/5 rounded-[3rem] p-12 min-h-[60vh] overflow-x-auto overflow-y-visible">
             <div className="flex justify-center min-w-max pb-12">
                 {agentTree.map(node => (
-                    <OrgNode key={node.id} agent={node} onEdit={openEditModal} />
+                    <OrgNode key={node.id} agent={node} onEdit={(e, a) => openEditModal(e, a)} />
                 ))}
             </div>
             {agentTree.length === 0 && !isLoading && (
@@ -722,9 +735,9 @@ export default function HiringHall() {
                         <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1 flex justify-between items-center px-1">
                             Department
                         </label>
-                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-cyan-400/50 outline-none appearance-none" value={newAgent.department} onChange={e => setNewAgent({...newAgent, department: e.target.value})}>
-                          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                          {departments.length === 0 && <option value="">No Departments Defined</option>}
+                        <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-cyan-400/50 outline-none appearance-none" value={newAgent.units?.[0] || ''} onChange={e => setNewAgent({...newAgent, units: [e.target.value]})}>
+                          {units.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                          {units.length === 0 && <option value="">No Units Defined</option>}
                         </select>
                       </div>
                     </div>
@@ -734,8 +747,15 @@ export default function HiringHall() {
                             AI Model Engine
                         </label>
                         <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-cyan-400/50 outline-none appearance-none" value={newAgent.model_id} onChange={e => setNewAgent({...newAgent, model_id: e.target.value})}>
-                          {aiModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                          {aiModels.length === 0 && <option value="">No Models Configured</option>}
+                          <option value="" disabled>Select AI Engine...</option>
+                          {Object.entries(groupedModels).map(([category, models]) => (
+                            <optgroup key={category} label={category}>
+                              {models.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                          {Object.keys(groupedModels).length === 0 && <option value="">No Active Models Found</option>}
                         </select>
                       </div>
                       <div className="space-y-2">
@@ -937,9 +957,9 @@ export default function HiringHall() {
         )}
       </AnimatePresence>
 
-      {/* --- DEPARTMENTS MODAL --- */}
+      {/* --- UNITS MODAL --- */}
       <AnimatePresence>
-        {isDeptModalOpen && <EntityManagementModal title="DEPARTMENTS" items={departments} apiPath="/api/departments" onClose={() => { setIsDeptModalOpen(false); fetchInitialData(); }} />}
+        {isUnitModalOpen && <EntityManagementModal title="OPERATING_UNITS" items={units} apiPath="/api/units" onClose={() => { setIsUnitModalOpen(false); fetchInitialData(); }} />}
       </AnimatePresence>
 
       {/* --- MODELS MODAL --- */}
@@ -953,7 +973,7 @@ export default function HiringHall() {
 
 // --- ORG CHART COMPONENTS ---
 
-function OrgNode({ agent, onEdit }: { agent: any, onEdit: (agent: any) => void }) {
+function OrgNode({ agent, onEdit }: { agent: any, onEdit: (e: any, agent: any) => void }) {
     return (
         <div className="flex flex-col items-center relative mx-8">
             {/* Agent Card */}
@@ -1078,97 +1098,4 @@ function EntityManagementModal({ title, items, apiPath, onClose }: any) {
             </motion.div>
         </div>
     );
-}
-
-function ModelManagementModal({ title, items, apiPath, onClose }: any) {
-    const [newItem, setNewItem] = useState({ id: '', name: '', provider: 'gemini', api_key: '', base_url: '' });
-    const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
-
-    const handleAdd = async () => {
-        if (!newItem.name) return;
-        const id = newItem.id || newItem.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        await fetch(apiPath, { method: 'POST', body: JSON.stringify({...newItem, id, is_active: true}) });
-        onClose();
-    };
-
-    const handleDelete = async (id: string) => {
-        await fetch(`${apiPath}?id=${id}`, { method: 'DELETE' });
-        onClose();
-    };
-
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-6">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#0E0E0E] p-10 rounded-[3rem] border border-white/10 w-full max-w-2xl shadow-2xl">
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-2xl font-black italic">{title}</h2>
-                    <button onClick={onClose}><X size={24} /></button>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-8">
-                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4">
-                        <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Active Engines</p>
-                        {items.map((item: any) => (
-                            <div key={item.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl group relative">
-                                <p className="font-bold text-sm text-cyan-400">{item.name}</p>
-                                <p className="text-[9px] text-zinc-500 font-black uppercase">{item.provider} • {item.id}</p>
-                                <button onClick={() => handleDelete(item.id)} className="absolute top-4 right-4 text-zinc-700 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="space-y-4 border-l border-white/5 pl-8">
-                        <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Register New Model</p>
-                        <input type="text" placeholder="Visual Name (e.g. Gemini 2.0)" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-                        
-                        <button type="button" onClick={() => setIsAdvancedOpen(!isAdvancedOpen)} className="text-[9px] text-zinc-600 uppercase font-black tracking-widest flex items-center gap-1 hover:text-white transition-all">
-                            {isAdvancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Advanced
-                        </button>
-                        
-                        {isAdvancedOpen && (
-                            <input type="text" placeholder="Model ID / Slug" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-[10px] outline-none" value={newItem.id} onChange={e => setNewItem({...newItem, id: e.target.value})} />
-                        )}
-
-                        <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none appearance-none" value={newItem.provider} onChange={e => setNewItem({...newItem, provider: e.target.value})}>
-                            <option value="gemini">Google Gemini</option>
-                            <option value="anthropic">Anthropic Claude</option>
-                            <option value="openai">OpenAI GPT</option>
-                            <option value="ollama">Ollama (Local)</option>
-                        </select>
-                        <div className="relative">
-                            <Key size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                            <input type="password" placeholder="API Key" className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-xs outline-none" value={newItem.api_key} onChange={e => setNewItem({...newItem, api_key: e.target.value})} />
-                        </div>
-                        <div className="relative">
-                            <Globe size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                            <input type="text" placeholder="Base URL (Ollama only)" className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-xs outline-none" value={newItem.base_url} onChange={e => setNewItem({...newItem, base_url: e.target.value})} />
-                        </div>
-                        <button onClick={handleAdd} className="w-full bg-cyan-400 text-black py-4 rounded-xl font-black text-xs uppercase hover:shadow-[0_10px_30px_rgba(34,211,238,0.2)] transition-all">REGISTER ENGINE</button>
-                    </div>
-                </div>
-            </motion.div>
-        </div>
-    );
-}
-
-function StatusItem({ label, status }: { label: string, status: string }) {
-  const getStatusColor = (s: string) => {
-    switch(s) {
-      case 'connected':
-      case 'configured': return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]';
-      case 'missing': return 'bg-zinc-700';
-      case 'offline':
-      case 'error': return 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]';
-      default: return 'bg-zinc-500';
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2 min-w-[80px]">
-      <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(status)}`} />
-      <span className="text-[7px] text-zinc-500 font-bold uppercase tracking-wider">{label}</span>
-      <span className="text-[6px] text-zinc-600 font-medium ml-auto">
-        {status === 'configured' || status === 'connected' ? 'ON' : 'OFF'}
-      </span>
-    </div>
-  );
 }

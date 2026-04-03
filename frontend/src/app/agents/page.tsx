@@ -18,22 +18,22 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { AgentInfo, listAllAgents } from '@/lib/anima';
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
 }
 
-interface Agent {
-  id: string;
-  name: string;
-  department: string;
-  responsibility: string;
-}
+/**
+ * ANIMA Agents Hub
+ * Visualizza e gestisce la flotta di agenti, filtrandoli per 'units' (reparti).
+ */
 
 export default function AgentsHub() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<AgentInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -51,23 +51,18 @@ export default function AgentsHub() {
   }, [messages]);
 
   const fetchAgents = async () => {
+    setIsLoading(true);
     try {
-      const res = await fetch('/api/sops'); // Temporaneo: usiamo l'API esistente o ne creiamo una nuova
-      // In realtà vogliamo listare le directory in agents/
-      // Per ora mockiamo o usiamo un endpoint dedicato
-      const agentsRes = await fetch('/api/agents');
-      const data = await agentsRes.json();
-      if (data.agents) {
+      const res = await fetch('/api/agents');
+      const data = await res.json();
+      if (data.agents && Array.isArray(data.agents)) {
         setAgents(data.agents);
         if (data.agents.length > 0) setSelectedAgent(data.agents[0]);
       }
     } catch (err) {
-      // Mock se fallisce (sviluppo locale)
-      setAgents([
-        { id: 'creative-director', name: 'Creative Director', department: 'Creative', responsibility: 'Senior Luxury Thinking' },
-        { id: 'cfo', name: 'CFO', department: 'Finance', responsibility: 'Budget & Cash Flow' }
-      ]);
-      setSelectedAgent({ id: 'creative-director', name: 'Creative Director', department: 'Creative', responsibility: 'Senior Luxury Thinking' });
+      console.error("[AGENTS_HUB] Error fetching agents:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -123,7 +118,8 @@ export default function AgentsHub() {
 
   const filteredAgents = agents.filter(a => 
     a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.department.toLowerCase().includes(searchQuery.toLowerCase())
+    (a.units && a.units.some(u => u.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+    a.role?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -168,20 +164,30 @@ export default function AgentsHub() {
                 : 'hover:bg-white/5 border border-transparent'
               }`}
             >
-              <div className="flex justify-between items-start mb-1">
-                <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                  selectedAgent?.id === agent.id ? 'text-cyan-400' : 'text-zinc-600'
-                }`}>
-                  {agent.department}
-                </span>
+              <div className="flex justify-between items-start mb-1 overflow-hidden">
+                <div className="flex flex-wrap gap-1 max-w-[80%]">
+                  {agent.units && agent.units.length > 0 ? (
+                    agent.units.map(unit => (
+                      <span key={unit} className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md border ${
+                        selectedAgent?.id === agent.id 
+                        ? 'text-cyan-400 border-cyan-400/30 bg-cyan-400/5' 
+                        : 'text-zinc-600 border-white/10 bg-white/5'
+                      }`}>
+                        {unit}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[8px] font-bold uppercase text-zinc-700 tracking-widest">UNASSIGNED</span>
+                  )}
+                </div>
                 {selectedAgent?.id === agent.id && (
-                  <motion.div layoutId="active-dot" className="w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_cyan]" />
+                  <motion.div layoutId="active-dot" className="w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_cyan] mt-1 shrink-0" />
                 )}
               </div>
               <h3 className={`font-bold transition-colors ${selectedAgent?.id === agent.id ? 'text-white' : 'text-zinc-400 group-hover:text-white'}`}>
                 {agent.name}
               </h3>
-              <p className="text-xs text-zinc-500 mt-1 line-clamp-1">{agent.responsibility}</p>
+              <p className="text-xs text-zinc-500 mt-1 line-clamp-1 italic">{agent.role}</p>
             </button>
           ))}
         </div>
@@ -209,7 +215,7 @@ export default function AgentsHub() {
                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
               </div>
               <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1.5 italic">
-                Neural Optimization Core  ·  {selectedAgent?.department || 'UNIT_O_1'}
+                Neural Optimization Core  ·  {selectedAgent?.units?.join(' / ') || 'UNASSIGNED'}
               </p>
             </div>
           </div>

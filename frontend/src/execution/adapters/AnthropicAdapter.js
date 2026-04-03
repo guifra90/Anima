@@ -28,7 +28,15 @@ class AnthropicAdapter extends BaseAdapter {
       system: system || '',
       messages: messages.map(m => ({ role: m.role, content: m.content })),
     });
-    return response.content[0].text;
+
+    return {
+      content: response.content[0].text,
+      usage: {
+        prompt_tokens: response.usage?.input_tokens || 0,
+        completion_tokens: response.usage?.output_tokens || 0,
+        total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0)
+      }
+    };
   }
 }
 

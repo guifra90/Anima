@@ -58,8 +58,32 @@ async function search({ query, maxResults = 5 }) {
 
   console.log(`[WEB-SKILL] search: "${query}"`);
 
-  // Use DuckDuckGo HTML endpoint and parse results
-  const html = await httpGet(`https://html.duckduckgo.com/html/?q=${encoded}`);
+  let html = '';
+  try {
+    // Strategy 1: DuckDuckGo HTML (Fast, but prone to 202/403)
+    html = await httpGet(`https://html.duckduckgo.com/html/?q=${encoded}`);
+  } catch (err) {
+    console.warn(`[WEB-SKILL] DDG Search failed (${err.message}), trying Jina Search fallback...`);
+    // Strategy 2: Jina AI Search (More resilient, cleaner results)
+    try {
+      const jinaSearchResult = await httpGet(`https://s.jina.ai/${encoded}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      const data = JSON.parse(jinaSearchResult);
+      if (data && data.data && data.data.length > 0) {
+        return { 
+          query, 
+          results: data.data.map(r => ({
+            title: r.title,
+            url: r.url,
+            snippet: r.description || r.content?.substring(0, 200) || ''
+          })) 
+        };
+      }
+    } catch (jinaErr) {
+      throw new Error(`All search strategies failed. Last error: ${jinaErr.message}`);
+    }
+  }
   
   const results = [];
   // Extract results from DDG HTML using regex (no DOM parser needed)

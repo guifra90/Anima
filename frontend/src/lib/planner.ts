@@ -41,9 +41,9 @@ function extractJson(text: any) {
  * Scompone una missione in task atomici assegnati agli agenti.
  * Ora è AGNOSTICO: usa la configurazione del plannerAgentId fornito.
  */
-export async function planMissionAndCreateTasks(missionId: string, objective: string, plannerAgentId: string) {
+export async function planMissionAndCreateTasks(missionId: string, objective: string, plannerAgentId: string, priority: number = 1) {
   try {
-    console.log(`[Planner] Inizio pianificazione per missione ${missionId} con agente ${plannerAgentId}`);
+    console.log(`[Planner] Inizio pianificazione per missione ${missionId} con agente ${plannerAgentId} (Priority: ${priority})`);
     
     const agents = await listAllAgents();
     const agentContext = agents.map(a => `- ${a.id}: ${a.name} (${a.role})`).join('\n');
@@ -103,6 +103,7 @@ export async function planMissionAndCreateTasks(missionId: string, objective: st
         agent_id: t.agent_id || "operations-manager",
         order_index: t.order_index || 0,
         status: 'pending',
+        priority: priority, // Eredita la priorità della missione per la gestione delle code
         requires_approval: t.requires_approval || false
       });
       createdTasks.push(task);
@@ -111,7 +112,7 @@ export async function planMissionAndCreateTasks(missionId: string, objective: st
     // Aggiorna lo stato della missione ad 'active'
     await updateMission(missionId, { status: 'active' });
 
-    console.log(`[Planner] Missione ${missionId} attivata con ${createdTasks.length} task.`);
+    console.log(`[Planner] Missione ${missionId} attivata con ${createdTasks.length} task (Priority: ${priority}).`);
     return createdTasks;
   } catch (err: any) {
     console.error("[Planner Error]", err.message);

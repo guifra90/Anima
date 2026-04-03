@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Target, Clock, CheckCircle2, AlertCircle, ChevronLeft, 
   LayoutDashboard, Search, Filter, MoreVertical, Loader2, Bot, Sparkles, Send,
-  User, Zap, Cpu
+  User, Zap, Cpu, Layers, Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -17,33 +17,52 @@ interface Agent {
   role: string;
 }
 
+interface Unit {
+  id: string;
+  name: string;
+  lead_id?: string;
+}
+
 export default function NewMissionPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [mission, setMission] = useState({
     title: '',
     objective: '',
     plannerAgentId: '',
+    unit_id: '',
+    priority: 1,
     execution_mode: 'manual' as 'manual' | 'autonomous'
   });
 
   useEffect(() => {
-    const fetchAgents = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch('/api/agents');
-        const data = await res.json();
-        if (data.agents) {
-          setAgents(data.agents);
-          // Auto-select CEO or first agent
-          const ceo = data.agents.find((a: Agent) => a.role.toLowerCase().includes('ceo') || a.role.toLowerCase().includes('manager'));
-          setMission(prev => ({ ...prev, plannerAgentId: ceo?.id || data.agents[0]?.id || '' }));
+        // Fetch Agents
+        const agentRes = await fetch('/api/agents');
+        const agentData = await agentRes.json();
+        if (agentData.agents) {
+          setAgents(agentData.agents);
         }
+
+        // Fetch Units
+        const { listUnits } = await import('@/lib/anima');
+        const unitList = await listUnits();
+        setUnits(unitList);
+
+        // Initial default planner
+        if (agentData.agents?.length > 0) {
+          const ceo = agentData.agents.find((a: Agent) => a.role.toLowerCase().includes('ceo') || a.role.toLowerCase().includes('manager'));
+          setMission(prev => ({ ...prev, plannerAgentId: ceo?.id || agentData.agents[0]?.id || '' }));
+        }
+
       } catch (err) {
-        console.error("Error fetching agents", err);
+        console.error("Error fetching launch data", err);
       }
     };
-    fetchAgents();
+    fetchData();
   }, []);
 
   const handleLaunch = async (e: React.FormEvent) => {
@@ -108,26 +127,69 @@ export default function NewMissionPage() {
                     />
                 </div>
 
+                <div className="grid grid-cols-2 gap-6 relative">
+                    <div className="space-y-3">
+                        <label className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.3em] ml-1 flex items-center gap-2 italic">
+                          <Layers size={10} className="text-cyan-600" /> TARGET_UNIT_ROUTING
+                        </label>
+                        <div className="relative group">
+                            <select 
+                                className="w-full bg-white/[0.01] border border-white/5 rounded-xl px-6 py-4 text-[10px] font-black uppercase tracking-widest italic leading-none focus:border-cyan-500/30 outline-none transition-all appearance-none cursor-pointer interactive"
+                                value={mission.unit_id}
+                                onChange={e => setMission({...mission, unit_id: e.target.value})}
+                            >
+                                <option value="" className="bg-black text-white font-mono uppercase tracking-widest text-[9px]">DIRECT_AGENT_ASSIGNMENT</option>
+                                {units.map(unit => (
+                                    <option key={unit.id} value={unit.id} className="bg-black text-white font-mono uppercase tracking-widest">
+                                        {unit.name} (AUTO-LEAD)
+                                    </option>
+                                ))}
+                            </select>
+                            <Briefcase className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-800" size={14} />
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.3em] ml-1 flex items-center gap-2 italic">
+                          <Bot size={10} className="text-cyan-600" /> {mission.unit_id ? 'UNIT_LEAD (LOCKED)' : 'PLANNER_CORTEX_SELECT'}
+                        </label>
+                        <div className="relative group">
+                            <select 
+                                disabled={!!mission.unit_id}
+                                className={cn(
+                                    "w-full bg-white/[0.01] border border-white/5 rounded-xl px-6 py-4 text-[10px] font-black uppercase tracking-widest italic leading-none focus:border-cyan-500/30 outline-none transition-all appearance-none cursor-pointer interactive",
+                                    mission.unit_id && "opacity-30 cursor-not-allowed"
+                                )}
+                                value={mission.plannerAgentId}
+                                onChange={e => setMission({...mission, plannerAgentId: e.target.value})}
+                            >
+                                {agents.map(agent => (
+                                    <option key={agent.id} value={agent.id} className="bg-black text-white font-mono uppercase tracking-widest">
+                                        {agent.name} // {agent.role}
+                                    </option>
+                                ))}
+                            </select>
+                            <User className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-800" size={14} />
+                        </div>
+                    </div>
+                </div>
+
                 <div className="space-y-3 relative">
                     <label className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.3em] ml-1 flex items-center gap-2 italic">
-                      <Bot size={10} className="text-cyan-600" /> PLANNER_CORTEX_SELECT
+                      <Zap size={10} className="text-cyan-600" /> NEURAL_PRIORITY_LEVEL (1-10)
                     </label>
-                    <div className="relative group">
-                        <select 
-                            required
-                            className="w-full bg-white/[0.01] border border-white/5 rounded-xl px-6 py-4 text-[10px] font-black uppercase tracking-widest italic leading-none focus:border-cyan-500/30 outline-none transition-all appearance-none cursor-pointer interactive"
-                            value={mission.plannerAgentId}
-                            onChange={e => setMission({...mission, plannerAgentId: e.target.value})}
-                        >
-                            {agents.map(agent => (
-                                <option key={agent.id} value={agent.id} className="bg-black text-white font-mono uppercase tracking-widest">
-                                    {agent.name} // {agent.role}
-                                </option>
-                            ))}
-                        </select>
-                        <User className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-800 group-hover:text-cyan-500 transition-colors" size={14} />
+                    <div className="flex items-center gap-6 p-4 bg-white/[0.01] border border-white/5 rounded-2xl">
+                        <input 
+                            type="range" 
+                            min="1" max="10" 
+                            className="flex-1 accent-cyan-500 h-1" 
+                            value={mission.priority}
+                            onChange={e => setMission({...mission, priority: parseInt(e.target.value)})}
+                        />
+                        <div className="w-12 h-12 flex items-center justify-center bg-white/5 rounded-xl border border-white/10 text-xl font-black italic italic">
+                            {mission.priority}
+                        </div>
                     </div>
-                    <p className="text-[8px] text-zinc-800 italic ml-1 font-bold uppercase tracking-tight opacity-50">L'unità selezionata fungerà da orchestratore principale per la sequence.</p>
                 </div>
 
                 <div className="space-y-3 relative">
