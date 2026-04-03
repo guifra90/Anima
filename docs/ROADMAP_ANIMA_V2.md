@@ -13,6 +13,8 @@
 - **Team / Hiring Hall**: 👥 **OPERATIVO** (Organigramma, UI V2 e scaffolding DNA completo).
 - **AI Core & Bridge**: 🧠 **STABILIZZATO** (V3.2: Neural Consolidation & Fingerprinting).
 - **Auto-Pilot & Memory**: 🧠 **OPERATIVO** (RAG 2.0 e Autonomous Chaining).
+- **Platform Segregation**: 🛡️ **OPERATIVO** (V4.5: System Core vs Agency Assets, branding agnostico).
+- **Neural Model Switcher**: 🎛️ **OPERATIVO** (Switch dinamico LLM in chat).
 
 ---
 
@@ -30,15 +32,24 @@
 - [X] **Knowledge Base (SOP)**: Iniezione dinamica di standard aziendali e linee guida brand Mirror.
 - [X] **Search Optimization**: Prioritizzazione della memoria interna rispetto alla ricerca web.
 
-### 3. Deployment & Stability (Domani 🚀)
-- [ ] Migrazione su VPS di produzione per test di stress h24.
-- [ ] Dockerization completa dello stack (Frontend, Backend, DB Proxy).
-- [ ] Setup di monitoring (Sentry/Logtail) per il kernel dell'agenzia.
+### 3. Platform Expansion (V5 - Prossimi Obiettivi 🚀)
+- [ ] **Multi-Agency Isolation**: Supporto nativo per più agenzie nello stesso database (Tenant IDs).
+- [ ] **Token Wallet & Billing**: Tracciamento costi e limiti di spesa granulari per ogni unità operativa.
+- [ ] **Agency Skill Store**: Possibilità di caricare skill personalizzate specifiche per ogni settore di agenzia.
+- [ ] **Enterprise Webhooks**: Integrazione push per eventi esterni (Zapier/Make/Slack custom apps).
+- [ ] **Dockerization**: Setup di test h24 su VPS di produzione per stress-test del kernel.
 
 ---
 
 ## 📝 Changelog Recente
-- **2026-04-02 (Oggi)**:
+- **2026-04-03 (Oggi)**:
+    - **V4.5 Platform Segregation**:
+        - **Filesystem Reorganization**: Gerarchia `agents/system/` e `agents/agency/` operativa.
+        - **Neural Model Switcher**: UI premium per il cambio dinamico dei modelli LLM.
+        - **System Core Tab**: Nuova sezione Dashboard per la gestione dei nodi protetti.
+        - **Neural Guard**: Protezione automatica contro la cancellazione dei nodi di sistema.
+        - **Generic Branding**: Rimosso ogni riferimento hardcoded a "Mirror", ora sistema agnostico.
+- **2026-04-02**:
     - **V3.5 Neural Memory RAG**: 
         - **Mission Consolidation**: Indicizzazione automatica in `pgvector` a fine missione.
         - **Zero-Day Recall**: Gli agenti ricordano i trend e i risultati passati istantaneamente.
