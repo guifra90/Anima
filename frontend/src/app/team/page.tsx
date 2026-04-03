@@ -31,6 +31,7 @@ interface Agent {
   anima_missions?: { title: string };
   anima_tasks?: { title: string };
   last_activity_at?: string;
+  is_system?: boolean;
 }
 
 interface Unit {
@@ -74,7 +75,8 @@ export default function HiringHall() {
     directives: '',
     skills: [],
     active_connections: [],
-    status: 'online'
+    status: 'online',
+    is_system: false
   });
   
   const [isEditMode, setIsEditMode] = useState(false);
@@ -87,7 +89,7 @@ export default function HiringHall() {
   const [agencyConstitution, setAgencyConstitution] = useState<string>('');
   const [isConstitutionSaving, setIsConstitutionSaving] = useState(false);
   const [activeModalTab, setActiveModalTab] = useState<'identity' | 'traits' | 'directives' | 'skills' | 'connections'>('identity');
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'team' | 'agency'>('team');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'team' | 'agency' | 'system'>('team');
   const [availableSkills, setAvailableSkills] = useState<any[]>([]);
   const [userConnections, setUserConnections] = useState<any[]>([]);
 
@@ -186,6 +188,10 @@ export default function HiringHall() {
 
   const handleDeleteAgent = async (e: React.MouseEvent, agent: Agent) => {
     e.stopPropagation();
+    if (agent.is_system) {
+      toast.error("NEURAL_SHIELD: Impossibile eliminare un agente di sistema.");
+      return;
+    }
     if (!confirm(`Sei sicuro di voler eliminare definitivamente l'agente ${agent.name}?`)) return;
     
     setUpdatingAgentId(agent.id);
@@ -260,13 +266,14 @@ export default function HiringHall() {
       role: '',
       units: [units[0]?.id || ''],
       bio: '',
-      model_id: aiModels[0]?.id || '',
+      model_id: aiModels[0]?.id || 'google/gemini-2.0-flash-001',
       reports_to: '',
       traits: [],
       directives: '',
       skills: [],
       active_connections: [],
-      status: 'online'
+      status: 'online',
+      is_system: activeSettingsTab === 'system'
     });
     setActiveModalTab('identity');
     setIsHiringModalOpen(true);
@@ -396,11 +403,17 @@ export default function HiringHall() {
     }
   };
 
-  const filteredAgents = agents.filter(a => 
-    a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (a.units?.some(u => u.toLowerCase().includes(searchQuery.toLowerCase())))
-  );
+  const filteredAgents = agents.filter(a => {
+    const matchesSearch = 
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (a.units?.some(u => u.toLowerCase().includes(searchQuery.toLowerCase())));
+    
+    // Filtro per Tab: 'team' -> !is_system, 'system' -> is_system
+    if (activeSettingsTab === 'team') return matchesSearch && !a.is_system;
+    if (activeSettingsTab === 'system') return matchesSearch && !!a.is_system;
+    return matchesSearch; // In 'agency' (Governance) mostriamo tutti o filtriamo diversamente se serve
+  });
 
   // --- ORG CHART DATA BUILDER ---
   const buildAgentTree = (list: Agent[]) => {
@@ -442,16 +455,17 @@ export default function HiringHall() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex bg-white/[0.01] p-1 rounded-xl border border-white/5 backdrop-blur-md">
+          <div className="flex bg-white/[0.01] p-1 rounded-xl border border-white/5 backdrop-blur-md text-nowrap">
             <button onClick={() => setActiveSettingsTab('team')} className={`px-5 py-2.5 rounded-lg text-[9px] font-black tracking-widest transition-all uppercase italic ${activeSettingsTab === 'team' ? 'bg-white text-black shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>ROSTER</button>
-            <button onClick={() => setActiveSettingsTab('agency')} className={`px-5 py-2.5 rounded-lg text-[9px] font-black tracking-widest transition-all uppercase italic ${activeSettingsTab === 'agency' ? 'bg-cyan-500 text-black shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>GOVERNANCE</button>
+            <button onClick={() => setActiveSettingsTab('system')} className={`px-5 py-2.5 rounded-lg text-[9px] font-black tracking-widest transition-all uppercase italic ${activeSettingsTab === 'system' ? 'bg-cyan-500 text-black shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>SYSTEM CORE</button>
+            <button onClick={() => setActiveSettingsTab('agency')} className={`px-5 py-2.5 rounded-lg text-[9px] font-black tracking-widest transition-all uppercase italic ${activeSettingsTab === 'agency' ? 'bg-emerald-500 text-black shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>GOVERNANCE</button>
           </div>
           
           <div className="w-px h-6 bg-white/10 mx-1" />
 
-          <button onClick={openHireModal} className="flex items-center gap-3 bg-white text-black px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-xl italic">
+          <button onClick={openHireModal} className="flex items-center gap-3 bg-white text-black px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-xl italic whitespace-nowrap">
             <UserPlus size={16} strokeWidth={3} />
-            ADD_AGENT_CORE
+            {activeSettingsTab === 'system' ? 'ADD_SYSTEM_NODE' : 'ADD_AGENT_CORE'}
           </button>
         </div>
       </header>
@@ -583,14 +597,16 @@ export default function HiringHall() {
                       >
                           <Edit3 size={12} />
                       </button>
-                      <button 
-                        onClick={(e) => handleDeleteAgent(e, agent)} 
-                        disabled={updatingAgentId === agent.id}
-                        className="p-2 bg-white/[0.02] rounded-lg border border-white/5 text-zinc-800 hover:text-rose-500 hover:bg-rose-500/10 transition-all interactive"
-                        title="Elimina Agente"
-                      >
-                          <Trash2 size={12} />
-                      </button>
+                      {!agent.is_system && (
+                        <button 
+                          onClick={(e) => handleDeleteAgent(e, agent)} 
+                          disabled={updatingAgentId === agent.id}
+                          className="p-2 bg-white/[0.02] rounded-lg border border-white/5 text-zinc-800 hover:text-rose-500 hover:bg-rose-500/10 transition-all interactive"
+                          title="Elimina Agente"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                      )}
                     </div>
 
                     {(() => {

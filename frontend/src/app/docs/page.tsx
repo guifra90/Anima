@@ -54,16 +54,30 @@ export default function DocsPage() {
             <li className="flex gap-4">
               <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-500 flex items-center justify-center text-[10px] font-bold shrink-0 mt-1">1</div>
               <div>
-                <strong className="text-white">Engineering Layer (Filesystem):</strong> Il "DNA" degli agenti in formato Markdown. Qui avviene lo sviluppo, il versionamento (Git) e il testing dei prompt core.
+                <strong className="text-white">Engineering Layer (Filesystem):</strong> Il "DNA" degli agenti in formato Markdown. Diviso per gerarchie: <code>agents/system/</code> per l'infrastruttura e <code>agents/agency/</code> per gli asset operativi.
               </div>
             </li>
             <li className="flex gap-4">
               <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-500 flex items-center justify-center text-[10px] font-bold shrink-0 mt-1">2</div>
               <div>
-                <strong className="text-white">Runtime Layer (Supabase):</strong> Lo stato operativo in tempo reale. Qui vengono salvate le missioni attive, i log di esecuzione e le configurazioni dinamiche.
+                <strong className="text-white">Runtime Layer (Supabase):</strong> Lo stato operativo in tempo reale. Qui vengono salvate le missioni attive, i log di esecuzione e le configurazioni dinamiche come gli override dei modelli LLM.
               </div>
             </li>
           </ul>
+        </div>
+      </section>
+
+      <section className="mb-16">
+        <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tighter italic">Platform Core v4.5: What's New</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-5 rounded-2xl bg-cyan-500/5 border border-cyan-500/10">
+            <h4 className="text-cyan-400 font-bold text-sm mb-2 uppercase">Neural Model Switcher</h4>
+            <p className="text-xs text-zinc-500 leading-relaxed">Possibilità di cambiare il motore di intelligenza (LLM) in tempo reale direttamente dalla chat del Neural Link, bypassando i default degli agenti.</p>
+          </div>
+          <div className="p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
+            <h4 className="text-emerald-400 font-bold text-sm mb-2 uppercase">System Segregation</h4>
+            <p className="text-xs text-zinc-500 leading-relaxed">Distinzione netta tra <strong>System Core</strong> (nodi infrastrutturali protetti) e <strong>Agency Assets</strong> (team operativo), sia nella UI che nel filesystem.</p>
+          </div>
         </div>
       </section>
 

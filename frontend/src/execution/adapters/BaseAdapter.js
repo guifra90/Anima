@@ -19,6 +19,20 @@ class BaseAdapter {
   }
 
   /**
+   * Streaming chat interaction
+   * @param {Array} messages 
+   * @param {string} system 
+   * @param {Object} options 
+   * @param {Function} onToken - Callback for ciascun chunk di testo
+   */
+  async chatStream(messages, system, options = {}, onToken) {
+    const result = await this.chat(messages, system, options);
+    const text = typeof result === 'string' ? result : (result.content || "");
+    if (onToken && text) onToken(text);
+    return result;
+  }
+
+  /**
    * Utility to format messages for providers that allow a system message in the array
    * @param {Array} messages 
    * @param {string} system 

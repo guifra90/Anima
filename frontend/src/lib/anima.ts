@@ -14,11 +14,11 @@ import {
 const REASONING_MODELS = ['pro', 'gpt-4', 'sonnet', 'o1', 'o3', 'r1', '3.5-sonnet', '3.7-sonnet'];
 const FAST_MODELS = ['mini', 'flash', 'haiku', 'v3', 'deepseek-chat'];
 
-// Transition flags
-const LEGACY_SYNC_DEPARTMENT = false; // Set to false to stop writing to 'department' column
+// Transition flags — Multi-Unit Shift Complete
 
 export interface AgentInfo {
   id: string;
+  is_system?: boolean;
   name: string;
   role: string;
   units?: string[]; // Multiple units support
@@ -145,16 +145,31 @@ export async function listAllAgents(): Promise<AgentInfo[]> {
 }
 
 /**
+ * Elenca i modelli AI attivi nel sistema
+ */
+export async function listActiveModels() {
+  const { data, error } = await supabase
+    .from('anima_ai_models')
+    .select('id, name, provider')
+    .eq('is_active', true)
+    .order('provider', { ascending: true });
+
+  if (error) {
+    console.error("[ANIMA LIB] Errore recupero modelli AI:", error.message);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
  * Crea (assume) un nuovo agente nel sistema
  */
 export async function createAgent(agentData: Partial<AgentInfo>) {
   const dataToInsert: any = { ...agentData };
   delete dataToInsert.active_connections;
   
-  // Transition logic: stop writing to legacy 'department' column
-  if (!LEGACY_SYNC_DEPARTMENT) {
-    delete dataToInsert.department;
-  }
+  // Transition logic: multi-unit support is now native
   
   // Sanitize empty strings to null for nullable foreign keys
   if (dataToInsert.reports_to === "") dataToInsert.reports_to = null;
@@ -186,10 +201,7 @@ export async function updateAgent(id: string, agentData: Partial<AgentInfo>) {
   const dataToUpdate: any = { ...agentData };
   delete dataToUpdate.active_connections;
 
-  // Transition logic: stop writing to legacy 'department' column
-  if (!LEGACY_SYNC_DEPARTMENT) {
-    delete dataToUpdate.department;
-  }
+  // Transition logic: multi-unit support is now native
 
   // Sanitize empty strings to null for nullable foreign keys
   if (dataToUpdate.reports_to === "") dataToUpdate.reports_to = null;
@@ -233,6 +245,13 @@ export async function isSlugUnique(slug: string): Promise<boolean> {
  * Elimina un agente dal database
  */
 export async function deleteAgent(id: string): Promise<boolean> {
+  // Protezione Neurale: Gli agenti di sistema non possono essere eliminati tramite SDK/UI
+  const agent = await getAgentInfo(id);
+  if (agent?.is_system) {
+    console.error(`[ANIMA LIB] IMPOSSIBILE ELIMINARE AGENTE DI SISTEMA: ${id}`);
+    throw new Error(`L'agente ${id} è parte dell'infrastruttura core di ANIMA e non può essere rimosso.`);
+  }
+
   const { error } = await supabase
     .from('anima_agents')
     .delete()
@@ -496,8 +515,9 @@ export async function deleteTask(id: string) {
 
 export async function createMessage(msg: {
   mission_id?: string;
+  session_id?: string;
   agent_id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   metadata?: any;
 }) {
@@ -633,7 +653,7 @@ export async function animaChat({ agentId, messages, systemPrompt: overrideSyste
   messages: { role: 'user' | 'assistant', content: string }[],
   systemPrompt?: string,
   missionId?: string,
-  options?: { bypassSafety?: boolean }
+  options?: { bypassSafety?: boolean, sessionId?: string }
 }) {
   try {
     // 1. RAG (eseguito sul frontend se possibile)

@@ -122,17 +122,39 @@ async function sync() {
         return;
     }
 
-    // 2. Carica agenti dal Filesystem
+    // 2. Carica agenti dal Filesystem (Scansione Ricorsiva gerarchie v4.5)
     if (!fs.existsSync(AGENTS_DIR)) fs.mkdirSync(AGENTS_DIR);
-    const localAgents = fs.readdirSync(AGENTS_DIR)
-        .filter(f => fs.statSync(path.join(AGENTS_DIR, f)).isDirectory());
+    const SYSTEM_DIR = path.join(AGENTS_DIR, 'system');
+    const AGENCY_DIR = path.join(AGENTS_DIR, 'agency');
+    if (!fs.existsSync(SYSTEM_DIR)) fs.mkdirSync(SYSTEM_DIR);
+    if (!fs.existsSync(AGENCY_DIR)) fs.mkdirSync(AGENCY_DIR);
 
+    const findLocalAgents = (dir, subDir = '') => {
+        let results = {};
+        const items = fs.readdirSync(dir);
+        for (const item of items) {
+            const fullPath = path.join(dir, item);
+            if (fs.statSync(fullPath).isDirectory()) {
+                if (fs.existsSync(path.join(fullPath, 'AGENTS.md'))) {
+                    // Trovato agente
+                    results[item] = fullPath;
+                } else if (item !== '.archive' && item !== 'prompts' && item !== 'tests') {
+                    // Scendi nella sottocartella (es: system/ o agency/)
+                    results = { ...results, ...findLocalAgents(fullPath, item) };
+                }
+            }
+        }
+        return results;
+    };
+
+    const localAgentsMap = findLocalAgents(AGENTS_DIR);
+    const localSlugs = Object.keys(localAgentsMap);
     const processedSlugs = new Set();
 
     // ─── PUSH / MERGE: Da Locale a DB ──────────────────────────────────────────
-    for (const slug of localAgents) {
+    for (const [slug, agentPathDir] of Object.entries(localAgentsMap)) {
         processedSlugs.add(slug);
-        const agentPath = path.join(AGENTS_DIR, slug, 'AGENTS.md');
+        const agentPath = path.join(agentPathDir, 'AGENTS.md');
         if (!fs.existsSync(agentPath)) continue;
 
         const fileContent = fs.readFileSync(agentPath, 'utf8');
@@ -164,8 +186,9 @@ async function sync() {
     // ─── PULL: Da DB a Locale ──────────────────────────────────────────────────
     for (const dbAgent of dbAgents) {
         const slug = dbAgent.id;
-        const agentDir = path.join(AGENTS_DIR, slug);
-        const isNew = !localAgents.includes(slug);
+        const subDir = dbAgent.is_system ? 'system' : 'agency';
+        const agentDir = path.join(AGENTS_DIR, subDir, slug);
+        const isNew = !localSlugs.includes(slug);
 
         if (isNew) {
             console.log(`📥 [PULL] Nuovo agente trovato su DB: ${slug}`);
@@ -215,16 +238,16 @@ async function sync() {
     const ARCHIVE_DIR = path.join(AGENTS_DIR, '.archive');
     if (!fs.existsSync(ARCHIVE_DIR)) fs.mkdirSync(ARCHIVE_DIR);
 
-    for (const slug of localAgents) {
+    for (const [slug, agentPathDir] of Object.entries(localAgentsMap)) {
         if (slug.startsWith('.')) continue; // Ignora .archive, .fired, etc.
         
         const dbAgent = dbAgents.find(a => a.id === slug);
         if (!dbAgent) {
-            console.log(`🗑️ [ARCHIVE] Rilevata cartella orfana: agents/${slug}. Spostamento in archivio...`);
+            console.log(`🗑️ [ARCHIVE] Rilevata cartella orfana: ${agentPathDir}. Spostamento in archivio...`);
             if (!syncOptions.dryRun) {
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 const targetPath = path.join(ARCHIVE_DIR, `${slug}_fired_${timestamp}`);
-                fs.renameSync(path.join(AGENTS_DIR, slug), targetPath);
+                fs.renameSync(agentPathDir, targetPath);
                 console.log(`   ✅ Spostato in: agents/.archive/${slug}_fired_${timestamp}`);
             }
         }

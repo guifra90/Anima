@@ -18,8 +18,9 @@ async function run(toolName, args, encryptedCredentials) {
   // e.g. "gmail__list_messages" -> "list_messages"
   // e.g. "gcal:create_event"  -> "create_event"
   const normalizedName = toolName
-    .replace(/^(gmail|gcal)[_:]+/, '')  // Strip namespace prefix
-    .replace(/__/g, '_');               // Normalize double underscore to single
+    .replace(/^(gmail|gcal)[_:]+/i, '')  // Strip namespace prefix (case-insensitive)
+    .replace(/__/g, '_')               // Normalize double underscore to single
+    .toLowerCase();                    // Convert to lowercase for switch matching
 
   console.log(`[GOOGLE-EXECUTOR] Running tool: "${toolName}" -> normalized: "${normalizedName}"`, args);
 

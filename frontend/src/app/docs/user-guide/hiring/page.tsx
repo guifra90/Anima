@@ -33,12 +33,12 @@ export default function HiringPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 my-10">
                 <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-cyan-500/20 transition-all">
-                    <h4 className="text-cyan-400 font-black text-xs uppercase mb-3 tracking-widest">Visualizzazione Organigramma</h4>
-                    <p className="text-sm">Passa dalla vista a griglia a quella gerarchica per capire chi risponde a chi.</p>
+                    <h4 className="text-cyan-400 font-black text-xs uppercase mb-3 tracking-widest">Roster vs System Core</h4>
+                    <p className="text-sm">Gli agenti sono ora divisi tra asset operativi (Roster) e infrastruttura critica (System Core), accessibili tramite tab dedicate.</p>
                 </div>
                 <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-blue-500/20 transition-all">
-                    <h4 className="text-blue-400 font-black text-xs uppercase mb-3 tracking-widest">Aggiunta Agenti</h4>
-                    <p className="text-sm">Puoi creare nuovi agenti direttamente dalla dashboard cliccando sul bottone di aggiunta (+).</p>
+                    <h4 className="text-blue-400 font-black text-xs uppercase mb-3 tracking-widest">Aggiunta Dinamica</h4>
+                    <p className="text-sm">Puoi creare nuovi membri del team o nuovi nodi di sistema cliccando su <code>ADD_AGENT_CORE</code> o <code>ADD_SYSTEM_NODE</code>.</p>
                 </div>
             </div>
         </div>
@@ -70,10 +70,10 @@ Department: Marketing & Design`}
 
       <div className="p-8 border border-white/10 bg-zinc-950/40 rounded-3xl mb-12">
         <h4 className="text-white font-black text-sm mb-4 flex items-center gap-2">
-            <ShieldCheck size={16} className="text-emerald-500" /> Sicurezza & Privilegi
+            <ShieldCheck size={16} className="text-emerald-500" /> Neural Guard Protection (v4.5)
         </h4>
         <p className="text-xs text-zinc-500 leading-relaxed font-medium">
-            Solo un <strong>Operator_01 (Admin)</strong> può aggiungere o rimuovere agenti core. Se sei un utente con privilegi limitati, potresti visualizzare ma non modificare la struttura del team.
+            Tutti gli agenti contrassegnati come <strong>is_system</strong> sono protetti dalla "Neural Guard". Questo significa che non possono essere eliminati accidentalmente dalla Dashboard, pur rimanendo completamente configurabili nel loro carattere e nelle loro istruzioni.
         </p>
       </div>
 

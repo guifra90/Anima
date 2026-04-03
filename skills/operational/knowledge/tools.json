@@ -1,0 +1,20 @@
+[
+  {
+    "name": "knowledge:search_memory",
+    "description": "Cerca nella memoria semantica (Knowledge Base) dell'agenzia. Usa questo tool per recuperare SOP, linee guida, briefing o decisioni passate.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Domanda o termini di ricerca semantica (es. 'linee guida colori Mirror', 'briefing progetto X')."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Numero di risultati da recuperare (default: 5)."
+        }
+      },
+      "required": ["query"]
+    }
+  }
+]

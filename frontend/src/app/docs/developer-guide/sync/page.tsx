@@ -34,12 +34,20 @@ export default function SyncPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 my-10">
                 <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-cyan-500/20 transition-all">
                     <h4 className="text-cyan-400 font-black text-xs uppercase mb-3 tracking-widest">📥 PULL (DB → Disk)</h4>
-                    <p className="text-sm">Se un agente è stato aggiornato o creato dalla Dashboard, il sync aggiorna o crea i file <code>AGENTS.md</code> in locale.</p>
+                    <p className="text-sm">Se un agente è creato o modificato dalla Dashboard, il sync lo salva in <code>agents/system/</code> o <code>agents/agency/</code> in base alla sua natura.</p>
                 </div>
                 <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-blue-500/20 transition-all">
                     <h4 className="text-blue-400 font-black text-xs uppercase mb-3 tracking-widest">🆙 PUSH (Disk → DB)</h4>
-                    <p className="text-sm">Se hai modificato un prompt localmente via codice, il sync aggiorna la riga corrispondente su Supabase per riflettere le nuove istruzioni.</p>
+                    <p className="text-sm">Il Sync Engine scansiona ricorsivamente tutte le sottodirectory degli agenti per aggiornare i prompt su Supabase.</p>
                 </div>
+            </div>
+
+            <div className="p-6 bg-cyan-500/5 border border-cyan-500/10 rounded-2xl">
+                <h4 className="text-xs font-black text-cyan-400 uppercase mb-2 tracking-tighter">New Hierarchical Structure (v4.5)</h4>
+                <ul className="text-[10px] space-y-1 mb-0">
+                    <li><code>agents/system/[slug]</code> — Nodi infrastrutturali (es: system, sentinel)</li>
+                    <li><code>agents/agency/[slug]</code> — Asset operativi dell'agenzia</li>
+                </ul>
             </div>
         </div>
       </section>
@@ -63,10 +71,11 @@ export default function SyncPage() {
 {`> anima@1.0.0 sync
 > node orchestration/sync.js
 
-[SYNC] Checking 12 agents...
-[SYNC] 🆙 Pushing local changes for: strategic-planner
-[SYNC] 📥 Pulling remote changes for: creative-director
-[SYNC] ✅ Synchronization complete.`}
+🔄 Avvio sincronizzazione ANIMA Agents...
+
+🆙 [PUSH] Aggiornamento DB per system [system/system]
+📥 [PULL] Nuovo agente trovato su DB: strategy-lead [agency/strategy-lead]
+✨ Sincronizzazione completata.`}
                  </pre>
             </div>
         </div>

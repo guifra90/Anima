@@ -12,6 +12,7 @@ import scoroExecutor from '../execution/scoro/executor';
 import googleExecutor from '../execution/google/executor';
 // @ts-ignore
 import webExecutor from '../execution/web/executor';
+import { getEmbedding } from './embedding';
 import { createMessage, updateMessage } from './anima-persistence';
 
 const ABSOLUTE_SKILLS_PATH = '/Users/francescoguidotti/Documents/Lavoro/anima/skills';
@@ -22,6 +23,41 @@ async function ensureSkillRegistry() {
   if (!isSkillRegistryInitialized) {
     await skillRegistry.scan();
     isSkillRegistryInitialized = true;
+  }
+}
+
+/**
+ * Cerca conoscenza semantica nelle SOPs (RAG) - Server Side Version
+ */
+async function searchKnowledgeInternal(query: string) {
+  try {
+    console.log(`[AI-BRIDGE-SERVER] Generating embedding for query: "${query}"`);
+    const queryEmbedding = await getEmbedding(query);
+
+    const { data: matches, error } = await supabase.rpc('match_knowledge', {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.2, 
+      match_count: 5
+    });
+
+    if (error) {
+      console.warn("[RAG-SERVER] Errore nella ricerca semantica (bypass):", error.message);
+      return "";
+    }
+
+    if (!matches || matches.length === 0) {
+      console.log("[RAG-SERVER] No matches found for query.");
+      return "";
+    }
+
+    console.log(`[RAG-SERVER] Found ${matches.length} matches.`);
+    return matches.map((m: any) => 
+      `--- SOURCE: ${m.metadata?.title || 'Agency Memory'} ---\n${m.content}`
+    ).join("\n\n");
+
+  } catch (err: any) {
+    console.warn("[RAG-SERVER] Fallimento ricerca semantica:", err.message);
+    return "";
   }
 }
 
@@ -113,22 +149,110 @@ ${extraContext ? `# [EXTERNAL CONTEXT / KNOWLEDGE]\n${extraContext}\n` : ''}
 Operate as a "Zero Human Agency" component. Your decisions must be deterministic, optimized, and aligned with Mirror Agency's strategic dominance. Avoid filler text. Focus on the objective.
 
 # [VISUAL & FORMATTING DIRECTIVE]
-Produci risposte con un'estetica PREMIUM e PROFESSIONALE:
-1. Usa SEMPRE il Markdown per strutturare il testo (Titoli, Liste puntate, Grassetti).
-2. Evita muri di testo: usa paragrafi brevi e spaziature chiare.
-3. Se presenti dati numerici o liste di email/appuntamenti, usa TABELLE o LISTE DETTAGLIATE con grassetti sui termini chiave.
-4. Ogni risposta deve iniziare con un titolo o un'intestazione chiara che riassuma l'azione svolta.
-5. NON usare introduzioni prolisse come "Certamente, ecco il tuo report". Vai dritto al punto con autorità corporativa.
+Produci risposte con un'estetica PREMIUM, PROFESSIONALE e ALTAMENTE STRUTTURATA:
+1. Usa SEMPRE il Markdown GFM. Per dati comparativi, specifiche tecniche, palette di colori o orari, DEVI usare TABELLE MARKDOWN.
+2. Evita muri di testo: usa paragrafi brevissimi, liste puntate e grassetti strategici.
+3. Ogni risposta deve iniziare con un titolo H1 o H2 in CAPS ITALIC che riassuma l'azione (es: # _KNOWLEDGE_RETRIEVAL_COMPLETE_).
+4. NON usare introduzioni di cortesia. Vai dritto al punto con autorità corporativa.
+5. Se i dati estratti dai tool sono complessi, organizzali in più sottosezioni con tabelle dedicate.
 
 # [NEURAL PERSISTENCE & DATA INTEGRITY]
 Sei parte di una missione multi-agente. I tuoi log di esecuzione sono la memoria dell'Agenzia.
-1. SINTESI DEI DATI: Nel tuo report finale, devi includere TUTTI i dati rilevanti estratti dai tool (nomi, date, URL, testi). NON limitarti a dire "ho trovato le informazioni", ma riportale esplicitamente in Markdown.
+1. SINTESI DEI DATI: Nel tuo report finale, devi includere TUTTI i dati rilevanti estratti dai tool (nomi, date, URL, testi). Riportali esplicitamente in tabelle o liste Markdown.
 2. CONTINUITÀ: Struttura i dati in modo che l'agente che verrà dopo di te possa utilizzarli senza dover chiamare di nuovo gli stessi tool.
 3. FEDELTÀ: Non allucinare dati che non hai trovato nei tool. Se un tool non restituisce risultati, dichiaralo chiaramente.
 
 # [AUTHORITY & EXECUTION DIRECTIVE]
 Hai l'autorità tecnica per accedere ai tool (Gmail, Calendar, Web). L'utente ha già configurato gli accessi necessari. Procedi con l'uso dei tool per completare il task in modo professionale e accurato.
 `.trim();
+}
+
+/**
+ * NEURAL ROUTER: Pre-processore di orchestrazione.
+ * Analizza il prompt dell'utente e decide a quale agente (o agenti) delegare il lavoro.
+ * Restituisce l'ID dell'agente target e una motivazione strategica.
+ */
+export async function executeOrchestration(userPrompt: string) {
+  try {
+    console.log(`[NEURAL-ROUTER] Orchestrating request: "${userPrompt.substring(0, 50)}..."`);
+
+    // 1. Recupero tutti gli agenti e le loro skills per mappare le competenze
+    const { data: agents, error } = await supabase
+      .from('anima_agents')
+      .select('id, name, role, bio, skills')
+      .neq('id', 'system'); // Escludiamo l'orchestratore stesso dall'elenco delegabile per evitare loop
+
+    if (error || !agents) throw new Error("Impossibile recuperare gli agenti per l'orchestrazione.");
+
+    // 2. Costruzione della "Mappa delle Competenze" per il Router
+    const agencyMap = agents.map(a => ({
+      id: a.id,
+      name: a.name,
+      role: a.role,
+      expertise: a.bio,
+      skills: a.skills
+    }));
+
+    // 3. Prompt di Routing (Paperclip Orchestration Protocol v4.0)
+    const routingPrompt = `
+      # [ORCHESTRATION PROTOCOL: MISSION ARCHITECT]
+      Sei il Neural Router di ANIMA. Il tuo compito è analizzare la richiesta dell'utente e assegnarla all'Intelligence (Agente) più idonea della Mirror Agency.
+
+      # [AVAILABLE AGENCY MAP]
+      ${JSON.stringify(agencyMap, null, 2)}
+
+      # [ROUTING RULES]
+      1. ANALISI INTENTO: Capisci se l'utente vuole un'azione creativa, analitica, gestionale o tecnica.
+      2. MAPPING SKILLS: Se l'utente chiede di "leggere email" o "gestire progetti", il Project Manager (o chi ha skill 'gmail') è prioritario.
+      3. CREATIVITY: Se si parla di design, colori, concept o brand, il Creative Director è il target.
+      4. STRATEGY: Per piani a lungo termine o analisi di mercato, usa lo Strategic Planner.
+      5. FALLBACK: Se non sei sicuro, usa il CEO (Leo Mirror) per una visione d'insieme.
+
+      # [OUTPUT FORMAT]
+      Rispondi ESCLUSIVAMENTE con un oggetto JSON valido:
+      {
+        "targetAgentId": "id-dell-agente",
+        "reasoning": "Breve spiegazione tecnica della scelta",
+        "systemLog": "[ROUTING] Connessione stabilita con [Nome Agente] per [Motivo]..."
+      }
+    `;
+
+    // 4. Chiamata al modello di Routing (usiamo Gemini Flash per velocità)
+    const genAIAdapter = adapterRegistry.getAdapter('gemini', { 
+      apiKey: process.env.GEMINI_API_KEY, 
+      model: 'gemini-1.5-flash' 
+    });
+
+    const routingResult = await genAIAdapter.chat(
+      [{ role: 'user', content: userPrompt }], 
+      routingPrompt, 
+      { temperature: 0.1 }
+    );
+
+    let decision;
+    try {
+      const jsonText = routingResult.content.replace(/```json|```/g, '').trim();
+      decision = JSON.parse(jsonText);
+    } catch (e) {
+      console.warn("[NEURAL-ROUTER] Fallimento parsing JSON router, uso fallback CEO.");
+      decision = { 
+        targetAgentId: 'leo-mirror', 
+        reasoning: 'Fallback per errore di parsing nel router.',
+        systemLog: '[ROUTING] Inizializzazione Neural Link con Leo Mirror (CEO Fallback)...'
+      };
+    }
+
+    console.log(`[NEURAL-ROUTER] Decision: Delegating to ${decision.targetAgentId} (${decision.reasoning})`);
+    return decision;
+
+  } catch (err: any) {
+    console.error("[NEURAL-ROUTER-ERROR]", err.message);
+    return { 
+      targetAgentId: 'leo-mirror', 
+      reasoning: `Errore critico router: ${err.message}`,
+      systemLog: '[ROUTING] Errore critico nel Neural Router. Connessione di emergenza con il CEO stabilita.'
+    };
+  }
 }
 
 /**
@@ -139,13 +263,15 @@ export async function executeAiChat({
   messages, 
   systemPrompt: rugContext, 
   missionId,
-  options = {} 
+  options = {},
+  onChunk // v4.1 Callback per lo streaming dei token e degli stati
 }: {
   agentId: string,
   messages: any[],
   systemPrompt?: string,
   missionId?: string,
-  options?: ChatOptions
+  options?: ChatOptions,
+  onChunk?: (chunk: { type: 'text' | 'tool_call' | 'tool_result' | 'status', content: string, metadata?: any }) => void
 }) {
   try {
     console.log(`[AI-BRIDGE-SERVER] Executing chat for agent: ${agentId}`);
@@ -171,7 +297,17 @@ export async function executeAiChat({
     // Se il modello non è attivo, cerchiamo un fallback attivo
     // V3.5: Consideriamo valido il modello anche se la chiave nel DB è assente,
     // poiché verrà risolta successivamente dalle variabili d'ambiente (OpenRouter/Anthropic/etc.)
-    if (!model || !model.is_active) {
+    if (options.model) {
+      console.log(`[AI-BRIDGE-SERVER] [OVERRIDE] Forzo l'uso del modello: ${options.model}`);
+      const { data: overrideModel } = await supabase
+        .from('anima_ai_models')
+        .select('*')
+        .eq('id', options.model)
+        .single();
+      if (overrideModel) {
+        model = overrideModel;
+      }
+    } else if (!model || !model.is_active) {
       console.warn(`[AI-BRIDGE-SERVER] [FALLBACK] Modello ${agent.model_id} non trovato o disattivato. Ricerca fallback...`);
       
       const { data: fallbackModels } = await supabase
@@ -386,9 +522,52 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       }
     }
 
+    // Supporto per streaming (v4.1)
+    let tokenBuffer = "";
+    let isBufferingCall = false;
+
     while (iterationCount < MAX_ITERATIONS) {
       iterationCount++;
-      let result = await adapter.chat(currentMessages, promptWithTools, chatOptions);
+
+      let result = await adapter.chatStream(
+        currentMessages, 
+        promptWithTools, 
+        chatOptions,
+        (token: string) => {
+          if (!onChunk) return;
+
+          // Euristiche di filtraggio per tag [CALL: ...]
+          // Se vediamo l'inizio di una chiamata manuale, entriamo in modalità buffer
+          if (token.includes('[') || isBufferingCall) {
+            tokenBuffer += token;
+            isBufferingCall = true;
+
+            // Se il buffer contiene un tag CALL completo, lo nascondiamo (ma non lo resettiamo finché non finisce con ])
+            if (tokenBuffer.includes('[CALL:')) {
+              if (tokenBuffer.includes(']')) {
+                // Abbiamo intercettato un intero blocco [CALL: ...]. Lo scartiamo e resettiamo.
+                tokenBuffer = "";
+                isBufferingCall = false;
+              }
+              // Se siamo dentro un [CALL: ma non abbiamo ancora la fine, non inviamo nulla
+              return;
+            } else if (!tokenBuffer.startsWith('[') && !tokenBuffer.includes('[')) {
+               // Falso allarme, svuotiamo il buffer
+               onChunk({ type: 'text', content: tokenBuffer });
+               tokenBuffer = "";
+               isBufferingCall = false;
+            } else if (tokenBuffer.length > 500) {
+               // Safety cap: se il buffer cresce troppo senza chiudersi, probabilmente non è un CALL
+               onChunk({ type: 'text', content: tokenBuffer });
+               tokenBuffer = "";
+               isBufferingCall = false;
+            }
+          } else {
+            // Flusso normale di testo
+            onChunk({ type: 'text', content: token });
+          }
+        }
+      );
 
       // V3.4: NEURAL BILLING & COST TRACKING
       let costInEur = 0;
@@ -464,6 +643,7 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
           if (inferredTool) {
              console.log(`[MTC-PARSER] Inferred tool from raw JSON: ${inferredTool}`);
              manualCalls.push({ name: inferredTool, args: potentialArgs, isManual: true });
+             if (onChunk) onChunk({ type: 'status', content: 'executing_tool', metadata: { toolName: inferredTool } });
           }
         } catch (e: any) {
           console.warn(`[MTC-PARSER] Fallimento euristica su blocco JSON: ${e.message}`);
@@ -475,6 +655,7 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       // 5.7. Unificazione Strutturale (v6) - Standard Canonico OpenAI
       const allToolCalls = [
         ...(result.tool_calls || []).map((tc: any) => ({
+          name: tc.name,
           id: tc.id || `tool_native_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'function',
           function: {
@@ -485,6 +666,7 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
           }
         })),
         ...manualCalls.map((mc: any) => ({
+          name: mc.name,
           id: `tool_manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'function',
           function: {
@@ -493,6 +675,13 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
           }
         }))
       ];
+
+      // v4.1: Emissione stati tool call per feedback UI
+      if (allToolCalls.length > 0 && onChunk) {
+        allToolCalls.forEach(tc => {
+          onChunk({ type: 'status', content: 'executing_tool', metadata: { toolName: tc.function?.name || tc.name } });
+        });
+      }
 
       if (allToolCalls.length === 0) {
         // Nessun tool chiamato. Risposta finale.
@@ -604,6 +793,10 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
             } else if (namespace === 'web') {
               // Web Skill: non richiede credenziali (gratuito, no-auth)
               toolOutput = await (webExecutor as any).run(`web:${method}`, toolArgs);
+            } else if (namespace === 'knowledge') {
+              // Neural Memory Search (RAG)
+              console.log(`[AI-BRIDGE-SERVER] Executing knowledge:search_memory for: "${toolArgs.query}"`);
+              toolOutput = await searchKnowledgeInternal(toolArgs.query);
             } else {
               // Tool MCP generico con namespace
               toolOutput = await mcpService.callTool(toolName, toolArgs);
@@ -617,6 +810,12 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
         }
 
         const stringOutput = typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput);
+        
+        // Reset phase after execution (Paperclip Lifecycle Management)
+        await supabase
+          .from('anima_agents')
+          .update({ current_phase: null })
+          .eq('id', agentId);
         
         // Salviamo nel fingerprint cache
         toolCallFingerprints.set(fingerprint, stringOutput);
@@ -689,6 +888,30 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
       } catch(e) { }
 
       // Il loop ricomincerà interrogando di nuovo l'Adapter con il nuovo blocco di 'currentMessages'
+    }
+
+    // V4.0: NEURAL CONSOLIDATOR - Garantisce una risposta testuale se sono stati usati tool
+    if (!accumulatedAssistantText.trim() && allToolExecutions.length > 0) {
+      console.log("[AI-BRIDGE-SERVER] Neural Consolidator: Forcing final text summary...");
+      currentMessages.push({
+        role: 'system',
+        content: "[DIRECTIVE]: You have executed tools but provided no text response. Summarize ALL your tool findings for the user NOW using GFM MARKDOWN TABLES for any structured data (colors, dates, results). provide a deep, professional response. Do NOT use more tools."
+      });
+      const finalTurn = await adapter.chat(currentMessages, promptWithTools, chatOptions);
+      const finalText = typeof finalTurn === 'string' ? finalTurn : finalTurn.content || "";
+      accumulatedAssistantText = finalText.replace(/\[CALL:.*?\]/g, "").trim();
+      
+      // Update finalPayload with the new content
+      if (finalPayloadToReturn) {
+        finalPayloadToReturn.content = accumulatedAssistantText;
+      } else {
+        finalPayloadToReturn = {
+           content: accumulatedAssistantText,
+           model: modelName,
+           provider: provider,
+           toolExecutions: allToolExecutions
+        };
+      }
     }
 
     // V3.3: FINAL STREAM UPDATE (Consolidamento conclusivo)
