@@ -11,7 +11,7 @@ export default function DocsPage() {
         </span>
         <h1 className="text-5xl font-black tracking-tight text-white mb-4">What is ANIMA?</h1>
         <p className="text-xl text-zinc-400 leading-relaxed font-medium">
-          <strong>ANIMA</strong> (Autonomous Network for Intelligent Mirror Agency) is an Operating System for Zero-Human Agencies. 
+          <strong>ANIMA</strong> (Autonomous Network for Intelligent Managed Agency) is an Operating System for Zero-Human Agencies. 
           It turns a collection of AI agents into a coordinated corporate machine.
         </p>
       </div>

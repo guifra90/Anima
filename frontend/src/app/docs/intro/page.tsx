@@ -19,7 +19,7 @@ export default function IntroPage() {
         <h2 className="text-2xl font-black text-white mb-6">I Tre Pilastri</h2>
         
         <Mermaid chart={`graph TD
-    P1[Human Sovereignty] --- P2[Mirror Data]
+    P1[Human Sovereignty] --- P2[Agency Data]
     P2 --- P3[Portable DNA]
     style P1 fill:#06b6d4,stroke:#06b6d4,color:#fff
     style P2 fill:#2563eb,stroke:#2563eb,color:#fff
@@ -36,15 +36,15 @@ export default function IntroPage() {
             <div className="flex gap-4 p-6 rounded-2xl bg-white/[0.02] border border-white/5">
                 <Database className="text-blue-500 shrink-0" />
                 <div>
-                    <h4 className="text-white font-bold mb-1">Mirror Data Integration</h4>
-                    <p className="text-sm text-zinc-500">ANIMA non lavora nel vuoto. È integrata nativamente con <strong>Scoro</strong>, <strong>Google</strong> e <strong>Slack</strong> per operare nel mondo reale.</p>
+                    <h4 className="text-white font-bold mb-1">Scale-Ready Architecture</h4>
+                    <p className="text-sm text-zinc-500">ANIMA non lavora isolata. È un hub operativo integrato nativamente con tool enterprise (Scoro, Google, Slack) per agire nel mondo reale per conto di qualsiasi agenzia.</p>
                 </div>
             </div>
             <div className="flex gap-4 p-6 rounded-2xl bg-white/[0.02] border border-white/5">
                 <Globe className="text-indigo-500 shrink-0" />
                 <div>
-                    <h4 className="text-white font-bold mb-1">Portable Agency DNA</h4>
-                    <p className="text-sm text-zinc-500">Il layout dei tuoi team e la logica degli agenti sono memorizzati in file <strong>Markdown standard</strong>, rendendo la tua azienda trasferibile e autonoma.</p>
+                    <h4 className="text-white font-bold mb-1">Agnostic Agency DNA</h4>
+                    <p className="text-sm text-zinc-500">La logica dei team e degli agenti risiede in file Markdown gerarchici, rendendo l'azienda interamente trasferibile, versionabile e indipendente dall'infrastruttura sottostante.</p>
                 </div>
             </div>
         </div>

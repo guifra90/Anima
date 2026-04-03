@@ -29,14 +29,19 @@ export default function DNAPage() {
         <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
           <Terminal size={18} className="text-blue-500" /> Struttura del file
         </h3>
-        <p className="text-sm text-zinc-500 mb-6">Ogni agente risiede in <code>agents/&lt;slug&gt;/AGENTS.md</code>. Il file utilizza YAML frontmatter per i metadati e Markdown per le istruzioni.</p>
+        <p className="text-sm text-zinc-500 mb-6">
+          Il DNA risiede in percorsi gerarchici (v4.5): 
+          <code>agents/system/&lt;slug&gt;/AGENTS.md</code> per il Core, 
+          <code>agents/agency/&lt;slug&gt;/AGENTS.md</code> per gli asset agnostici.
+        </p>
         
         <div className="bg-black/40 rounded-2xl p-6 border border-white/5 font-mono text-xs text-zinc-500 overflow-x-auto leading-relaxed">
 <pre className="!bg-transparent !p-0 m-0">
 {`---
 name: "Marianna Tutta Panna"
 role: "Lead Marketer"
-model: "gpt-4o"
+model_id: "google/gemini-2.0-flash-001"
+is_system: false
 skills: ["market_research", "slack_notify"]
 ---
 
@@ -63,7 +68,7 @@ Sei l'esperta di marketing di ANIMA. Il tuo obiettivo è...
             <ShieldCheck size={22} className="text-emerald-400" />
           </div>
           <h3 className="text-lg font-black text-white mb-2 tracking-tight">Validation Suite</h3>
-          <p className="text-sm text-zinc-500 leading-relaxed font-medium">Ogni agente deve avere un file <code>tests/&lt;slug&gt;.test.js</code> che verifica la coerenza del suo prompt di sistema.</p>
+          <p className="text-sm text-zinc-500 leading-relaxed font-medium">Ogni agente deve avere un file <code>tests/&lt;slug&gt;.test.js</code> nella propria cartella che verifica la coerenza del suo comportamento operativo.</p>
         </div>
       </div>
 
