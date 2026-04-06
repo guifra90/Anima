@@ -1,17 +1,21 @@
 const { getAuthenticatedClient } = require('./client');
 const gmail = require('./gmail');
 const gcal = require('./gcal');
+const CredentialRegistry = require('../utils/credential-registry');
 
 /**
  * Main dispatcher for Google Tools.
- * 
- * Accepts both formats for full model-agnostic compatibility:
- * - "gmail:list_messages"  (canonical ANIMA namespace format)
- * - "gmail__list_messages" (OpenRouter/Gemini wire format)
- * - "list_messages"        (legacy bare method format)
  */
-async function run(toolName, args, encryptedCredentials) {
-  const auth = await getAuthenticatedClient(encryptedCredentials);
+async function run(toolName, args, credentialsOrAgentId) {
+  let credentials = credentialsOrAgentId;
+
+  if (typeof credentialsOrAgentId === 'string' && credentialsOrAgentId.length > 30) {
+    // Resolve via registry
+    const resolved = await CredentialRegistry.resolve(credentialsOrAgentId, 'gmail');
+    credentials = resolved || await CredentialRegistry.resolve(credentialsOrAgentId, 'google');
+  }
+
+  const auth = await getAuthenticatedClient(credentials);
 
   // Normalize: strip namespace prefix if present (handles ':', '__', or bare method)
   // e.g. "gmail:list_messages" -> "list_messages"

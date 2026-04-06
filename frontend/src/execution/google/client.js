@@ -4,15 +4,21 @@ const { google } = require('googleapis');
  * Creates an authenticated Google OAuth2 client from saved credentials.
  * Handles automatic token refreshing if needed.
  */
-async function getAuthenticatedClient(encryptedCredentials) {
+async function getAuthenticatedClient(encryptedOrDecrypted) {
   const { decrypt } = require('../utils/encryption');
   
   let credentials;
-  try {
-    const rawDecrypt = decrypt(encryptedCredentials);
-    credentials = typeof rawDecrypt === 'string' ? JSON.parse(rawDecrypt) : rawDecrypt;
-  } catch (err) {
-    throw new Error('FAILED_TO_DECRYPT_GOOGLE_CREDENTIALS');
+  if (typeof encryptedOrDecrypted === 'object' && encryptedOrDecrypted !== null) {
+    // Already decrypted via Registry or direct call
+    credentials = encryptedOrDecrypted;
+  } else {
+    try {
+      const rawDecrypt = decrypt(encryptedOrDecrypted);
+      credentials = typeof rawDecrypt === 'string' ? JSON.parse(rawDecrypt) : rawDecrypt;
+    } catch (err) {
+      console.warn('[GOOGLE-CLIENT] Decryption failed, assuming raw credentials or bad format.');
+      credentials = encryptedOrDecrypted;
+    }
   }
 
   const oauth2Client = new google.auth.OAuth2(

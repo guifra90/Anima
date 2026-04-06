@@ -39,8 +39,13 @@ Assicurati che l'agente funzioni come previsto lanciando i suoi test:
 node agents/<slug>/tests/<slug>.test.js
 ```
 
-## 5. Aggiornamento Agenzia
-Verifica che l'agente compaia correttamente in:
-- `doc/ANIMA.md` (Tabella Organigramma)
-- `COMPANY.md` (Sotto il relativo Team)
-- `npm run help` (Menu interattivo)
+## 6. Protocollo Paperclip (Estetica e Localizzazione)
+Ogni agente deve rispettare rigorosamente il **MASTER_STYLE** di ANIMA per garantire un'esperienza premium e uniforme:
+
+1. **TITOLI**: Usa sempre `## TITOLO IN TUTTO MAIUSCOLO`. È **tassativamente vietato** l'uso di underscore (`_`) o asterischi (`*`) nei titoli. (Esempio: `## ANALISI PROGETTI`).
+2. **LOCALIZZAZIONE**: Usa il formato europeo per i numeri (punto per migliaia, virgola per decimali: `1.250,50 €`) e il formato italiano per le date (`GG/MM/AAAA`).
+3. **TONO**: Adotta un tono "Human-Authoritative". Sii tecnico, preciso e professionale. Salta i saluti e vai dritto al punto.
+4. **TABELLE**: Presenta i dati strutturati (ID, scadenze, budget) esclusivamente tramite tabelle GFM.
+
+> [!TIP]
+> Queste regole sono imposte a livello di Bridge AI; non duplicarle nel `system.md` dell'agente se non per rinforzi logici specifici del ruolo.

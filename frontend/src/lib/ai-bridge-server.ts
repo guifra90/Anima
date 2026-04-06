@@ -14,6 +14,7 @@ import googleExecutor from '../execution/google/executor';
 import webExecutor from '../execution/web/executor';
 import { getEmbedding } from './embedding';
 import { createMessage, updateMessage } from './anima-persistence';
+import { MASTER_STYLE } from './prompts/master-style';
 
 const ABSOLUTE_SKILLS_PATH = '/Users/francescoguidotti/Documents/Lavoro/anima/skills';
 const skillRegistry = new (SkillRegistry as any)(ABSOLUTE_SKILLS_PATH);
@@ -126,6 +127,8 @@ async function buildPaperclipPrompt(agent: any, extraContext?: string) {
   }
 
   return `
+${MASTER_STYLE}
+
 # [IDENTITY]
 Name: ${agent.name}
 Role: ${agent.role}
@@ -148,22 +151,16 @@ ${extraContext ? `# [EXTERNAL CONTEXT / KNOWLEDGE]\n${extraContext}\n` : ''}
 # [OPERATIONAL MANDATE]
 Operate as a "Zero Human Agency" component. Your decisions must be deterministic, optimized, and aligned with Mirror Agency's strategic dominance. Avoid filler text. Focus on the objective.
 
-# [VISUAL & FORMATTING DIRECTIVE]
-Produci risposte con un'estetica PREMIUM, PROFESSIONALE e ALTAMENTE STRUTTURATA:
-1. Usa SEMPRE il Markdown GFM. Per dati comparativi, specifiche tecniche, palette di colori o orari, DEVI usare TABELLE MARKDOWN.
-2. Evita muri di testo: usa paragrafi brevissimi, liste puntate e grassetti strategici.
-3. Ogni risposta deve iniziare con un titolo H1 o H2 in CAPS ITALIC che riassuma l'azione (es: # _KNOWLEDGE_RETRIEVAL_COMPLETE_).
-4. NON usare introduzioni di cortesia. Vai dritto al punto con autorità corporativa.
-5. Se i dati estratti dai tool sono complessi, organizzali in più sottosezioni con tabelle dedicate.
-
 # [NEURAL PERSISTENCE & DATA INTEGRITY]
-Sei parte di una missione multi-agente. I tuoi log di esecuzione sono la memoria dell'Agenzia.
-1. SINTESI DEI DATI: Nel tuo report finale, devi includere TUTTI i dati rilevanti estratti dai tool (nomi, date, URL, testi). Riportali esplicitamente in tabelle o liste Markdown.
-2. CONTINUITÀ: Struttura i dati in modo che l'agente che verrà dopo di te possa utilizzarli senza dover chiamare di nuovo gli stessi tool.
-3. FEDELTÀ: Non allucinare dati che non hai trovato nei tool. Se un tool non restituisce risultati, dichiaralo chiaramente.
+Sei parte di una missione multi-agente. I tuoi log di esecuzione sono la memoria storica dell'Agenzia.
+1. ESTRAZIONE DATI: Includi SEMPRE i dati grezzi estratti dai tool (ID, nomi, scadenze) in tabelle Markdown leggibili.
+2. CONTINUITÀ: Struttura i dati in modo che l'agente che verrà dopo di te possa utilizzarli immediatamente senza interrogare di nuovo lo stesso tool.
+3. FEDELTÀ: Non allucinare dati. Se un tool non restituisce risultati, dichiaralo in modo professionale nelle tabelle.
 
 # [AUTHORITY & EXECUTION DIRECTIVE]
 Hai l'autorità tecnica per accedere ai tool (Gmail, Calendar, Web). L'utente ha già configurato gli accessi necessari. Procedi con l'uso dei tool per completare il task in modo professionale e accurato.
+
+${MASTER_STYLE}
 `.trim();
 }
 
@@ -420,33 +417,10 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
     };
 
 
-    // 5. Recupero Connessioni ed Esecuzione Tool Locale
-    const { data: agentConnections } = await supabase
-      .from('anima_agent_connections')
-      .select('connection_id, anima_connections(*)')
-      .eq('agent_id', agentId);
-    
-    const decryptedConnections = (agentConnections || []).map((ac: any) => {
-      // Robustezza: Supabase join potrebbe restituire array o singolo oggetto
-      const anima_conn = Array.isArray(ac.anima_connections) ? ac.anima_connections[0] : ac.anima_connections;
-      if (!anima_conn) return null;
+    // 5. [PAPERCLIP] Connection Resolution is now handled by executors via agentId
 
-      const creds = anima_conn.credentials;
-      const rawEncrypted = typeof creds === 'string' ? creds : creds?.encrypted;
-      
-      return {
-        ...anima_conn,
-        credentials: rawEncrypted
-      };
-    }).filter((c: any) => c && c.type); // Escludiamo eventuali null
-
-    // Diagnostica reale su disco per ispezione
-    try {
-      fs.writeFileSync('/tmp/bridge_trace.json', JSON.stringify({ 
-        agentId, 
-        connectionsFound: decryptedConnections.map((c: any) => ({ type: c.type, hasCreds: !!c.credentials })) 
-      }, null, 2));
-    } catch(e) { }
+    // [PAPERCLIP] Live Diagnostics Link with Agent identity
+    console.log(`[AI-BRIDGE-SERVER] Routing tools via Paperclip Protocol for Agent: ${agentId}`);
 
     const adapter = adapterRegistry.getAdapter(provider, adapterConfig);
     
@@ -733,14 +707,6 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
             const namespace = toolName.substring(0, colonIdx);
             const method = toolName.substring(colonIdx + 1);
             
-            // Verifichiamo se abbiamo una connessione per questo namespace
-            const connection = decryptedConnections.find((c: any) => 
-              c.type === namespace || 
-              (namespace === 'gcal' && c.type === 'gmail') ||
-              (namespace === 'gmail' && c.type === 'google')
-            );
-            
-            // V3.3: Safety Block enhanced with immediate return
             const isMutatingTool = !options?.bypassSafety && (
               /:(create|update|delete|send|post|patch|put)/i.test(toolName) || 
               /^(create|update|delete|send|post|patch|put)/i.test(toolName)
@@ -749,7 +715,6 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
             if (isMutatingTool) {
                console.log(`[AI-BRIDGE-SERVER] [CRITICAL] Mutating tool detected: ${toolName}. INITIATING SAFETY BLOCK.`);
                
-               // STREAM UPDATE: Notifica blocco sicurezza in tempo reale
                if (liveMessageId) {
                  await updateMessage(liveMessageId, { 
                    content: accumulatedAssistantText + `\n\n### 🛡️ [SAFETY BLOCK ACTIVATED]\nRichiesta di autorizzazione per: **${toolName}**`,
@@ -757,7 +722,6 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
                  }).catch(() => {});
                }
 
-               // Return IMMEDIATELY to halt the loop and pass control back to the human
                return {
                  content: (accumulatedAssistantText ? accumulatedAssistantText + "\n\n" : "") + 
                           `# [SAFETY BLOCK ACTIVATED]\nL'agente ha richiesto l'uso di un tool critico: **${toolName}**.\nRichiesta di approvazione manuale inviata all'operatore.`,
@@ -770,7 +734,6 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
                };
             }
 
-            // STREAM UPDATE: Segnala esecuzione tool imminente
             if (liveMessageId) {
               await updateMessage(liveMessageId, { 
                 content: accumulatedAssistantText + `\n\n> ⚙️ **Esecuzione**: \`${toolName}\`...`,
@@ -778,18 +741,15 @@ NON chiedere all'utente di configurare gli accessi o di darti permessi.
               }).catch(() => {});
             }
 
-            // Paperclip Monitoring: Update phase to CALLING_TOOL
             await supabase
               .from('anima_agents')
               .update({ current_phase: `CALLING: ${toolName.toUpperCase()}` })
               .eq('id', agentId);
 
             if (namespace === 'scoro') {
-              if (!connection) throw new Error(`Nessun account Scoro collegato a questo agente.`);
-              toolOutput = await (scoroExecutor as any).run(method, toolArgs, connection.credentials);
+              toolOutput = await (scoroExecutor as any).run(method, toolArgs, agentId);
             } else if (namespace === 'gmail' || namespace === 'gcal') {
-              if (!connection) throw new Error(`Nessun account Google (${namespace}) collegato a questo agente.`);
-              toolOutput = await (googleExecutor as any).run(`${namespace}:${method}`, toolArgs, connection.credentials);
+              toolOutput = await (googleExecutor as any).run(`${namespace}:${method}`, toolArgs, agentId);
             } else if (namespace === 'web') {
               // Web Skill: non richiede credenziali (gratuito, no-auth)
               toolOutput = await (webExecutor as any).run(`web:${method}`, toolArgs);

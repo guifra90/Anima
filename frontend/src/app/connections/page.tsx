@@ -13,6 +13,8 @@ interface Connection {
   id: string;
   type: 'gmail' | 'gcal' | 'scoro';
   name: string;
+  is_primary: boolean;
+  metadata?: any;
   created_at: string;
 }
 
@@ -30,6 +32,9 @@ export default function ConnectionsPage() {
     companyId: '',
     baseUrl: 'https://proweb.scoro.com/api/v2/'
   });
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchConnections();
@@ -52,23 +57,33 @@ export default function ConnectionsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/connections', {
-        method: 'POST',
+      const url = '/api/connections';
+      const method = isEditing ? 'PATCH' : 'POST';
+      
+      const body: any = {
+        type: 'scoro',
+        name: scoroForm.name,
+        credentials: {
+          apiKey: scoroForm.apiKey,
+          companyId: scoroForm.companyId,
+          baseUrl: scoroForm.baseUrl
+        }
+      };
+
+      if (isEditing) body.id = editingId;
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'scoro',
-          name: scoroForm.name,
-          credentials: {
-            apiKey: scoroForm.apiKey,
-            companyId: scoroForm.companyId,
-            baseUrl: scoroForm.baseUrl
-          }
-        })
+        body: JSON.stringify(body)
       });
 
       if (res.ok) {
         setIsAddModalOpen(false);
         setNewConnectionType(null);
+        setIsEditing(false);
+        setEditingId(null);
+        setScoroForm({ name: '', apiKey: '', companyId: '', baseUrl: 'https://proweb.scoro.com/api/v2/' });
         fetchConnections();
       } else {
         const error = await res.json();
@@ -79,6 +94,22 @@ export default function ConnectionsPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEdit = (conn: Connection) => {
+    setIsEditing(true);
+    setEditingId(conn.id);
+    setNewConnectionType(conn.type);
+    
+    if (conn.type === 'scoro') {
+      setScoroForm({
+        name: conn.name,
+        apiKey: '', // Lascia vuoto per non cambiare
+        companyId: conn.metadata?.companyId || '',
+        baseUrl: conn.metadata?.baseUrl || 'https://proweb.scoro.com/api/v2/'
+      });
+    }
+    setIsAddModalOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -113,7 +144,12 @@ export default function ConnectionsPage() {
           </div>
 
           <button 
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => {
+              setIsEditing(false);
+              setEditingId(null);
+              setScoroForm({ name: '', apiKey: '', companyId: '', baseUrl: 'https://proweb.scoro.com/api/v2/' });
+              setIsAddModalOpen(true);
+            }}
             className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-2xl font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-lg"
           >
             <Plus size={18} strokeWidth={3} />
@@ -164,17 +200,30 @@ export default function ConnectionsPage() {
                      conn.type === 'gmail' ? <Mail size={28} /> : <Calendar size={28} />}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-bold text-lg group-hover:text-cyan-400 transition-colors uppercase tracking-tight">{conn.name}</h4>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-lg group-hover:text-cyan-400 transition-colors uppercase tracking-tight">{conn.name}</h4>
+                      {conn.is_primary && (
+                        <span className="px-2 py-0.5 bg-cyan-400/10 border border-cyan-400/20 rounded-md text-[8px] font-black text-cyan-400 uppercase tracking-tighter">PRIMARY</span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest leading-none mt-1">
                       {conn.type} account • Linked {new Date(conn.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <button 
-                    onClick={() => handleDelete(conn.id)}
-                    className="p-3 bg-white/5 rounded-xl text-zinc-700 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleEdit(conn)}
+                      className="p-3 bg-white/5 rounded-xl text-zinc-700 hover:text-cyan-400 hover:bg-cyan-400/10 transition-all"
+                    >
+                      <Plus size={18} className="rotate-45" /> {/* This is a placeholder for an edit/settings icon */}
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(conn.id)}
+                      className="p-3 bg-white/5 rounded-xl text-zinc-700 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             ))}
@@ -194,7 +243,7 @@ export default function ConnectionsPage() {
               className="w-full max-w-lg bg-[#0E0E0E] rounded-[3rem] border border-white/10 p-10 relative shadow-2xl"
             >
               <button 
-                onClick={() => { setIsAddModalOpen(false); setNewConnectionType(null); }}
+                onClick={() => { setIsAddModalOpen(false); setNewConnectionType(null); setIsEditing(false); }}
                 className="absolute top-8 right-8 text-zinc-600 hover:text-white"
               >
                 <X size={24} />
@@ -231,7 +280,9 @@ export default function ConnectionsPage() {
               ) : (
                 <form onSubmit={handleAddScoro} className="space-y-6">
                   <div>
-                    <h2 className="text-2xl font-black italic tracking-tighter mb-2 uppercase text-orange-500">SCORO SETUP</h2>
+                    <h2 className="text-2xl font-black italic tracking-tighter mb-2 uppercase text-orange-500">
+                      {isEditing ? 'SCORO UPDATE' : 'SCORO SETUP'}
+                    </h2>
                     <p className="text-xs text-zinc-500">Inserisci le credenziali API per il tuo account Scoro.</p>
                   </div>
 
@@ -242,11 +293,11 @@ export default function ConnectionsPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">API Key</label>
-                      <input required type="password" placeholder="••••••••••••••••" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-orange-500/50 outline-none" value={scoroForm.apiKey} onChange={e => setScoroForm({...scoroForm, apiKey: e.target.value})} />
+                      <input required={!isEditing} type="password" placeholder={isEditing ? "•••••••• (Lascia vuoto per non cambiare)" : "••••••••••••••••"} className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-orange-500/50 outline-none" value={scoroForm.apiKey} onChange={e => setScoroForm({...scoroForm, apiKey: e.target.value})} />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Company ID</label>
-                      <input required type="text" placeholder="e.g. 123456" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-orange-500/50 outline-none" value={scoroForm.companyId} onChange={e => setScoroForm({...scoroForm, companyId: e.target.value})} />
+                      <input required={!isEditing} type="text" placeholder="e.g. 123456" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:border-orange-500/50 outline-none" value={scoroForm.companyId} onChange={e => setScoroForm({...scoroForm, companyId: e.target.value})} />
                     </div>
                   </div>
 
@@ -255,9 +306,9 @@ export default function ConnectionsPage() {
                     disabled={isSubmitting}
                     className="w-full bg-orange-500 text-black py-5 rounded-3xl font-black text-lg tracking-tighter italic hover:shadow-lg disabled:opacity-50"
                   >
-                    {isSubmitting ? <Loader2 className="animate-spin mx-auto" /> : "FINALIZE CONNECTION"}
+                    {isSubmitting ? <Loader2 className="animate-spin mx-auto" /> : isEditing ? "UPDATE CONNECTION" : "FINALIZE CONNECTION"}
                   </button>
-                  <button type="button" onClick={() => setNewConnectionType(null)} className="w-full text-zinc-600 text-[10px] font-black uppercase hover:text-white">Back to selection</button>
+                  <button type="button" onClick={() => { setNewConnectionType(null); setIsEditing(false); }} className="w-full text-zinc-600 text-[10px] font-black uppercase hover:text-white">Back to selection</button>
                 </form>
               )}
             </motion.div>

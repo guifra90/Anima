@@ -4,11 +4,52 @@
 
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio.js");
-// const { SseClientTransport } = require("@modelcontextprotocol/sdk/client/sse.js"); // In case we need HTTP/SSE
+const { SSEClientTransport } = require("@modelcontextprotocol/sdk/client/sse.js");
 
 class MCPService {
   constructor() {
     this.clients = new Map();
+  }
+
+  /**
+   * Connect to a remote MCP server via SSE.
+   * @param {string} serverId 
+   * @param {string} url 
+   */
+  async connectSse(serverId, url, apiKey = null, companyId = null) {
+    console.log(`[MCP] Connessione a ${serverId} via SSE (${url})...`);
+    try {
+      const endpoint = new URL(url);
+      
+      // Scoro-specific headers or standard Authorization
+      const headers = {};
+      if (apiKey) {
+        headers['X-Scoro-Token'] = apiKey;
+        headers['Authorization'] = `Bearer ${apiKey}`; // Fallback
+      }
+      if (companyId) {
+          headers['X-Scoro-Company-ID'] = companyId;
+      }
+
+      const transport = new SSEClientTransport(endpoint, {
+        eventSourceInit: {
+          headers: headers
+        }
+      });
+
+      const client = new Client(
+        { name: "anima-client", version: "1.2.0" },
+        { capabilities: { tools: {} } }
+      );
+
+      await client.connect(transport);
+      this.clients.set(serverId, client);
+      console.log(`[MCP] ${serverId} (SSE) connesso con successo.`);
+      return client;
+    } catch (err) {
+      console.error(`[MCP] Errore SSE ${serverId}:`, err.message);
+      throw err;
+    }
   }
 
   /**
